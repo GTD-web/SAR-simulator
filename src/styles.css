@@ -561,6 +561,9 @@ html, body, #cesiumContainer {
 
 .sidebar-section input[type="text"],
 .sidebar-section input[type="number"],
+.sidebar-section input[type="datetime-local"],
+.sidebar-section input[type="date"],
+.sidebar-section input[type="time"],
 .sidebar-section select,
 .sidebar-section textarea {
   width: 100%;
@@ -583,9 +586,41 @@ html, body, #cesiumContainer {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+/* datetime-local / date / time: 캘린더·시계 아이콘을 테마에 맞게 */
+.sidebar-section input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.sidebar-section input[type="date"]::-webkit-calendar-picker-indicator,
+.sidebar-section input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.8;
+  cursor: pointer;
+}
+.sidebar-section input[type="datetime-local"]::-webkit-datetime-edit,
+.sidebar-section input[type="date"]::-webkit-datetime-edit,
+.sidebar-section input[type="time"]::-webkit-datetime-edit {
+  color: white;
+}
+.sidebar-section input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper,
+.sidebar-section input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.sidebar-section input[type="time"]::-webkit-datetime-edit-fields-wrapper {
+  color: white;
+}
+.sidebar-section input[type="datetime-local"]::-webkit-datetime-edit-text,
+.sidebar-section input[type="date"]::-webkit-datetime-edit-text,
+.sidebar-section input[type="time"]::-webkit-datetime-edit-text {
+  color: #aaa;
+}
+.sidebar-section input[type="datetime-local"]::-webkit-datetime-edit-ampm-field,
+.sidebar-section input[type="date"]::-webkit-datetime-edit-ampm-field,
+.sidebar-section input[type="time"]::-webkit-datetime-edit-ampm-field {
+  color: white;
+}
+
 /* 포커스 상태 스타일 */
 .sidebar-section input[type="text"]:focus,
 .sidebar-section input[type="number"]:focus,
+.sidebar-section input[type="datetime-local"]:focus,
+.sidebar-section input[type="date"]:focus,
+.sidebar-section input[type="time"]:focus,
 .sidebar-section select:focus,
 .sidebar-section textarea:focus {
   border: 2px solid #4CAF50;
@@ -596,6 +631,9 @@ html, body, #cesiumContainer {
 /* 포커스 상태에서 outline 제거 (border로 대체) */
 .sidebar-section input[type="text"]:focus-visible,
 .sidebar-section input[type="number"]:focus-visible,
+.sidebar-section input[type="datetime-local"]:focus-visible,
+.sidebar-section input[type="date"]:focus-visible,
+.sidebar-section input[type="time"]:focus-visible,
 .sidebar-section select:focus-visible,
 .sidebar-section textarea:focus-visible {
   outline: none;

@@ -69,9 +69,6 @@ export class OrbitSettings {
     const initialTimeInput = document.createElement('input');
     initialTimeInput.type = 'datetime-local';
     initialTimeInput.id = 'prototypeOrbitInitialTime';
-    initialTimeInput.style.width = '100%';
-    initialTimeInput.style.marginTop = '4px';
-    initialTimeInput.style.padding = '4px';
     const now = new Date();
     initialTimeInput.value =
       `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T` +
