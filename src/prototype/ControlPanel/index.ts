@@ -251,6 +251,13 @@ export class ControlPanelManager {
   }
 
   /**
+   * 지도 우클릭 위치를 타겟으로 설정 (경도·위도 입력 갱신 및 타겟 이동)
+   */
+  setTargetLocation(longitude: number, latitude: number): void {
+    this.targetSettings?.setTargetFromMap(longitude, latitude);
+  }
+
+  /**
    * 제어 패널 정리
    */
   cleanup(): void {

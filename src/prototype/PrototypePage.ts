@@ -17,6 +17,8 @@ export class PrototypePage {
   private controlPanelManager: ControlPanelManager | null;
   private regionInfoPanel: HTMLElement | null;
   private lastRegionInfo: RegionInfo | null;
+  private mapContextMenuEl: HTMLElement | null;
+  private mapContextMenuClose: (() => void) | null;
 
   constructor() {
     this.viewerManager = null;
@@ -24,6 +26,8 @@ export class PrototypePage {
     this.controlPanelManager = null;
     this.regionInfoPanel = null;
     this.lastRegionInfo = null;
+    this.mapContextMenuEl = null;
+    this.mapContextMenuClose = null;
   }
 
   /**
@@ -124,6 +128,33 @@ export class PrototypePage {
       .target-geo-data-json-title { margin: 16px 0 8px 0; font-size: 13px; color: #ccc; }
       .target-geo-data-json-pre { max-height: 240px; overflow: auto; font-size: 11px; white-space: pre-wrap; word-break: break-all; padding: 8px; border: 1px solid #333; border-radius: 4px; margin: 0 0 8px 0; background: rgba(0,0,0,0.3); }
       .target-geo-data-json-dl { width: 100%; padding: 8px; margin-top: 4px; cursor: pointer; }
+      .prototype-map-context-menu {
+        position: fixed;
+        z-index: 2000;
+        min-width: 220px;
+        background: rgba(30, 30, 30, 0.97);
+        color: #eee;
+        font-family: sans-serif;
+        font-size: 13px;
+        border: 1px solid #555;
+        border-radius: 6px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        padding: 10px 12px;
+      }
+      .prototype-map-context-menu-section { margin-bottom: 10px; }
+      .prototype-map-context-menu-row { padding: 2px 0; }
+      .prototype-map-context-menu-actions { border-top: 1px solid #444; padding-top: 8px; }
+      .prototype-map-context-menu-btn {
+        width: 100%;
+        padding: 8px 10px;
+        background: #2a5a8a;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .prototype-map-context-menu-btn:hover { background: #357ab8; }
     `;
     document.head.appendChild(style);
   }
@@ -415,6 +446,50 @@ export class PrototypePage {
   }
 
   /**
+   * 지도 우클릭 컨텍스트 메뉴 표시 (경·위도 + 해당 위치로 타겟 설정)
+   */
+  private showMapContextMenu(longitude: number, latitude: number, screenX: number, screenY: number): void {
+    this.closeMapContextMenu();
+    const menu = document.createElement('div');
+    menu.id = 'prototypeMapContextMenu';
+    menu.className = 'prototype-map-context-menu';
+    menu.innerHTML = `
+      <div class="prototype-map-context-menu-section">
+        <div class="prototype-map-context-menu-row"><strong>경도</strong>: ${longitude.toFixed(6)}°</div>
+        <div class="prototype-map-context-menu-row"><strong>위도</strong>: ${latitude.toFixed(6)}°</div>
+      </div>
+      <div class="prototype-map-context-menu-actions">
+        <button type="button" class="prototype-map-context-menu-btn" data-action="set-target">해당 위치로 타겟 설정</button>
+      </div>
+    `;
+    menu.style.left = `${screenX}px`;
+    menu.style.top = `${screenY}px`;
+    document.body.appendChild(menu);
+
+    const close = (): void => {
+      if (menu.parentNode) menu.parentNode.removeChild(menu);
+      this.mapContextMenuEl = null;
+      this.mapContextMenuClose = null;
+      document.removeEventListener('click', close);
+    };
+    this.mapContextMenuEl = menu;
+    this.mapContextMenuClose = close;
+
+    menu.querySelector('[data-action="set-target"]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.controlPanelManager?.setTargetLocation(longitude, latitude);
+      close();
+    });
+    document.addEventListener('click', close);
+  }
+
+  private closeMapContextMenu(): void {
+    if (this.mapContextMenuClose) {
+      this.mapContextMenuClose();
+    }
+  }
+
+  /**
    * Prototype 페이지 초기화
    */
   async initialize(): Promise<void> {
@@ -451,7 +526,13 @@ export class PrototypePage {
         onRegionInfoFetched: this.updateRegionInfoPanel.bind(this),
         regionInfoPanel: this.regionInfoPanel,
       });
-      
+
+      // 7. 지도 우클릭 컨텍스트 메뉴 (경·위도 표시, 해당 위치로 타겟 설정)
+      const canvas = this.viewer.scene.canvas;
+      canvas.addEventListener('contextmenu', (e: Event) => e.preventDefault());
+      this.viewerManager.setupMapRightClickHandler((lon, lat, x, y) => {
+        this.showMapContextMenu(lon, lat, x, y);
+      });
     } catch (error) {
       console.error('[PrototypePage] 초기화 오류:', error);
     }
@@ -477,6 +558,7 @@ export class PrototypePage {
    * Prototype 페이지 정리
    */
   cleanup(): void {
+    this.closeMapContextMenu();
     // 제어 패널 정리
     if (this.controlPanelManager) {
       this.controlPanelManager.cleanup();

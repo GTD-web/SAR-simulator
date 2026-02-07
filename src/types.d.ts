@@ -7,6 +7,7 @@ declare namespace Cesium {
   
   namespace Cartesian3 {
     function fromDegrees(longitude: number, latitude: number, height?: number): Cartesian3;
+    function fromDegreesArrayHeights(coordinates: number[]): Cartesian3[];
     function fromRadians(longitude: number, latitude: number, height?: number, result?: Cartesian3): Cartesian3;
     function normalize(cartesian: Cartesian3, result?: Cartesian3): Cartesian3;
     function multiplyByScalar(cartesian: Cartesian3, scalar: number, result?: Cartesian3): Cartesian3;
@@ -37,7 +38,8 @@ declare namespace Cesium {
   }
   
   namespace Cartographic {
-    function fromCartesian(cartesian: Cartesian3, result?: Cartographic): Cartographic;
+    function fromCartesian(cartesian: Cartesian3, ellipsoid?: any, result?: Cartographic): Cartographic;
+    function fromDegrees(longitude: number, latitude: number, height?: number, result?: Cartographic): Cartographic;
     function toCartesian(cartographic: Cartographic, ellipsoid?: any, result?: Cartesian3): Cartesian3;
   }
   class Cartographic {
@@ -196,6 +198,19 @@ declare namespace Cesium {
   
   // Buildings 관련
   function createOsmBuildingsAsync(options?: any): Promise<any>;
+
+  // Terrain
+  function sampleTerrainMostDetailed(terrainProvider: any, positions: Cartographic[]): Promise<Cartographic[]>;
+
+  // 3D Tiles
+  class Cesium3DTileset {
+    root: any;
+  }
+  class BoundingSphere {
+    constructor(center: Cartesian3, radius?: number);
+    center: Cartesian3;
+    radius: number;
+  }
   
   // Enum 관련
   enum ArcType {

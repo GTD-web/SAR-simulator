@@ -138,4 +138,32 @@ export class CesiumViewerManager {
       }
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
   }
+
+  /**
+   * 지도 우클릭 이벤트 핸들러 등록 (컨텍스트 메뉴용: 경위도 + 화면 좌표 전달)
+   */
+  setupMapRightClickHandler(
+    callback: (longitude: number, latitude: number, screenX: number, screenY: number) => void
+  ): void {
+    if (!this.viewer) {
+      throw new Error('Viewer가 초기화되지 않았습니다.');
+    }
+    const canvas = this.viewer.scene.canvas;
+    const handler = new Cesium.ScreenSpaceEventHandler(canvas);
+    handler.setInputAction((click: any) => {
+      const cartesian = this.viewer.camera.pickEllipsoid(
+        click.position,
+        this.viewer.scene.globe.ellipsoid
+      );
+      if (cartesian) {
+        const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+        const longitude = Cesium.Math.toDegrees(cartographic.longitude);
+        const latitude = Cesium.Math.toDegrees(cartographic.latitude);
+        const rect = canvas.getBoundingClientRect();
+        const screenX = rect.left + click.position.x;
+        const screenY = rect.top + click.position.y;
+        callback(longitude, latitude, screenX, screenY);
+      }
+    }, Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+  }
 }

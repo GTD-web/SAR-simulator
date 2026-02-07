@@ -206,7 +206,7 @@ export class TargetSettings {
     sar_section.appendChild(range_title);
     this.createInputField(sar_section, 'Range Count:', 'prototypeTargetRangeCount', '8', '1', '10000', '1');
     this.createInputField(sar_section, 'Range Spacing (km):', 'prototypeTargetRangeSpacing', '1.5', '0', '1000', '0.1');
-    this.createInputField(sar_section, 'Range Offset (km):', 'prototypeTargetRangeOffset', '30', '-1000', '1000', '0.1');
+    this.createInputField(sar_section, 'Range Offset (km):', 'prototypeTargetRangeOffset', '0', '-1000', '1000', '0.1');
 
     // Azimuth
     const azimuth_title = document.createElement('h5');
@@ -217,7 +217,7 @@ export class TargetSettings {
     sar_section.appendChild(azimuth_title);
     this.createInputField(sar_section, 'Azimuth Count:', 'prototypeTargetAzimuthCount', '9', '1', '10000', '1');
     this.createInputField(sar_section, 'Azimuth Spacing (km):', 'prototypeTargetAzimuthSpacing', '1.5', '0', '1000', '0.1');
-    this.createInputField(sar_section, 'Azimuth Offset (km):', 'prototypeTargetAzimuthOffset', '-40', '-1000', '1000', '0.1');
+    this.createInputField(sar_section, 'Azimuth Offset (km):', 'prototypeTargetAzimuthOffset', '0', '-1000', '1000', '0.1');
 
     // 요약 (읽기 전용)
     const summary_title = document.createElement('h5');
@@ -317,12 +317,12 @@ export class TargetSettings {
     const range_params: SarRangeParams = {
       count: parseInt((document.getElementById('prototypeTargetRangeCount') as HTMLInputElement)?.value || '8', 10),
       spacing_km: parseFloat((document.getElementById('prototypeTargetRangeSpacing') as HTMLInputElement)?.value || '1.5'),
-      offset_km: parseFloat((document.getElementById('prototypeTargetRangeOffset') as HTMLInputElement)?.value || '30'),
+      offset_km: parseFloat((document.getElementById('prototypeTargetRangeOffset') as HTMLInputElement)?.value || '0'),
     };
     const azimuth_params: SarAzimuthParams = {
       count: parseInt((document.getElementById('prototypeTargetAzimuthCount') as HTMLInputElement)?.value || '9', 10),
       spacing_km: parseFloat((document.getElementById('prototypeTargetAzimuthSpacing') as HTMLInputElement)?.value || '1.5'),
-      offset_km: parseFloat((document.getElementById('prototypeTargetAzimuthOffset') as HTMLInputElement)?.value || '-40'),
+      offset_km: parseFloat((document.getElementById('prototypeTargetAzimuthOffset') as HTMLInputElement)?.value || '0'),
     };
     const summary = computeSarSummary(range_params, azimuth_params);
     summary_el.textContent =
@@ -351,12 +351,12 @@ export class TargetSettings {
     const range_params: SarRangeParams = {
       count: parseInt((document.getElementById('prototypeTargetRangeCount') as HTMLInputElement)?.value || '8', 10),
       spacing_km: parseFloat((document.getElementById('prototypeTargetRangeSpacing') as HTMLInputElement)?.value || '1.5'),
-      offset_km: parseFloat((document.getElementById('prototypeTargetRangeOffset') as HTMLInputElement)?.value || '30'),
+      offset_km: parseFloat((document.getElementById('prototypeTargetRangeOffset') as HTMLInputElement)?.value || '0'),
     };
     const azimuth_params: SarAzimuthParams = {
       count: parseInt((document.getElementById('prototypeTargetAzimuthCount') as HTMLInputElement)?.value || '9', 10),
       spacing_km: parseFloat((document.getElementById('prototypeTargetAzimuthSpacing') as HTMLInputElement)?.value || '1.5'),
-      offset_km: parseFloat((document.getElementById('prototypeTargetAzimuthOffset') as HTMLInputElement)?.value || '-40'),
+      offset_km: parseFloat((document.getElementById('prototypeTargetAzimuthOffset') as HTMLInputElement)?.value || '0'),
     };
     const corners = computeGridCornersLonLat(
       center_lon,
@@ -478,7 +478,7 @@ export class TargetSettings {
         outlineColor: Cesium.Color.BLACK,
         outlineWidth: 2,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        verticalOrigin: Cesium.VerticalOrigin.MIDDLE,
+        verticalOrigin: Cesium.VerticalOrigin.CENTER,
         pixelOffset: new Cesium.Cartesian2(8, 0),
       },
     });
@@ -498,7 +498,7 @@ export class TargetSettings {
         outlineColor: Cesium.Color.BLACK,
         outlineWidth: 2,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        verticalOrigin: Cesium.VerticalOrigin.MIDDLE,
+        verticalOrigin: Cesium.VerticalOrigin.CENTER,
         pixelOffset: new Cesium.Cartesian2(8, 0),
       },
     });
@@ -547,12 +547,12 @@ export class TargetSettings {
     const range_params: SarRangeParams = {
       count: parseInt((document.getElementById('prototypeTargetRangeCount') as HTMLInputElement)?.value || '8', 10),
       spacing_km: parseFloat((document.getElementById('prototypeTargetRangeSpacing') as HTMLInputElement)?.value || '1.5'),
-      offset_km: parseFloat((document.getElementById('prototypeTargetRangeOffset') as HTMLInputElement)?.value || '30'),
+      offset_km: parseFloat((document.getElementById('prototypeTargetRangeOffset') as HTMLInputElement)?.value || '0'),
     };
     const azimuth_params: SarAzimuthParams = {
       count: parseInt((document.getElementById('prototypeTargetAzimuthCount') as HTMLInputElement)?.value || '9', 10),
       spacing_km: parseFloat((document.getElementById('prototypeTargetAzimuthSpacing') as HTMLInputElement)?.value || '1.5'),
-      offset_km: parseFloat((document.getElementById('prototypeTargetAzimuthOffset') as HTMLInputElement)?.value || '-40'),
+      offset_km: parseFloat((document.getElementById('prototypeTargetAzimuthOffset') as HTMLInputElement)?.value || '0'),
     };
     const grid_points = computeAllGridPointsLonLat(
       center_lon,
@@ -750,6 +750,19 @@ export class TargetSettings {
     } catch (error) {
       console.error('[TargetSettings] 타겟으로 카메라 이동 오류:', error);
     }
+  }
+
+  /**
+   * 지도 우클릭 위치로 타겟 설정 (경·위도 입력 갱신, 폴리곤·카메라 이동)
+   */
+  setTargetFromMap(lon: number, lat: number): void {
+    const lonEl = document.getElementById('prototypeTargetLongitude') as HTMLInputElement;
+    const latEl = document.getElementById('prototypeTargetLatitude') as HTMLInputElement;
+    if (lonEl) lonEl.value = String(lon);
+    if (latEl) latEl.value = String(lat);
+    this.updateSummary();
+    this.updateTargetDebounced();
+    if (this.viewer) this.flyToTarget();
   }
 
   /**
