@@ -172,7 +172,7 @@ export class ControlPanelManager {
           this.flyToEarth();
         }
 
-        // 타겟 설정 탭 클릭 시 해당 타겟으로 카메라 이동 + 우측 지역 정보 패널 표시 + 지역 정보 자동 수집
+        // 타겟 설정 탭 클릭 시 해당 타겟으로 카메라 이동 + 우측 지역 정보 패널 표시 (JSON은 '지역 정보 가져오기' 버튼으로만 생성)
         if (targetTab === 'target' && this.targetSettings) {
           if (this.satelliteSettings) {
             this.satelliteSettings.cancelCameraAnimation();
@@ -181,7 +181,6 @@ export class ControlPanelManager {
           if (this.regionInfoPanel) {
             this.regionInfoPanel.classList.remove('hidden');
           }
-          this.targetSettings.fetchRegionInfo();
         } else {
           // 다른 탭으로 전환 시 우측 지역 정보 패널 숨김
           if (this.regionInfoPanel) {

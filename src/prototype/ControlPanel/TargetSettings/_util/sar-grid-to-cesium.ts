@@ -38,6 +38,7 @@ export function computeGridCenterLonLat(
 
 /**
  * 그리드 4꼭짓점 (폴리곤용) WGS84 [lon, lat] 반환.
+ * 첫/끝 샘플에서 반 스페이싱(±spacing/2)만큼 확장해, 마지막 점까지 한 칸(Spacing)이 온전히 범위에 포함되도록 함.
  * 순서: (azimuth_min, range_min) -> (azimuth_max, range_min) -> (azimuth_max, range_max) -> (azimuth_min, range_max)
  */
 export function computeGridCornersLonLat(
@@ -47,27 +48,25 @@ export function computeGridCornersLonLat(
   range_params: SarRangeParams,
   azimuth_params: SarAzimuthParams
 ): LonLat[] {
+  const half_r = range_params.spacing_km / 2;
+  const half_a = azimuth_params.spacing_km / 2;
+  const az_min =
+    azimuth_params.offset_km - half_a;
+  const az_max =
+    azimuth_params.offset_km +
+    (azimuth_params.count - 1) * azimuth_params.spacing_km +
+    half_a;
+  const r_min = range_params.offset_km - half_r;
+  const r_max =
+    range_params.offset_km +
+    (range_params.count - 1) * range_params.spacing_km +
+    half_r;
+
   const corners_km: [number, number][] = [
-    [
-      azimuth_params.offset_km,
-      range_params.offset_km,
-    ],
-    [
-      azimuth_params.offset_km +
-        (azimuth_params.count - 1) * azimuth_params.spacing_km,
-      range_params.offset_km,
-    ],
-    [
-      azimuth_params.offset_km +
-        (azimuth_params.count - 1) * azimuth_params.spacing_km,
-      range_params.offset_km +
-        (range_params.count - 1) * range_params.spacing_km,
-    ],
-    [
-      azimuth_params.offset_km,
-      range_params.offset_km +
-        (range_params.count - 1) * range_params.spacing_km,
-    ],
+    [az_min, r_min],
+    [az_max, r_min],
+    [az_max, r_max],
+    [az_min, r_max],
   ];
 
   return corners_km.map(([along_km, cross_km]) =>
