@@ -5,6 +5,8 @@
 export interface VelocityDirectionOptions {
   velocityAzimuthDeg?: number;
   velocityElevationDeg?: number;
+  /** 정규화된 ECEF 속도 벡터 (단위 벡터). 있으면 POC 방식으로 X축 = 진행방향 사용 */
+  velocityEcef?: { x: number; y: number; z: number };
 }
 
 /**
@@ -21,16 +23,40 @@ export function calculateBaseAxes(
     return null;
   }
 
-  const az = options?.velocityAzimuthDeg;
-  const el = options?.velocityElevationDeg;
-  const useVelocity =
-    az !== undefined && el !== undefined && !Number.isNaN(az) && !Number.isNaN(el);
-
   // Z축: 지구 중심 방향 (nadir)
   const zAxis = Cesium.Cartesian3.negate(
     Cesium.Cartesian3.normalize(cartesian, new Cesium.Cartesian3()),
     new Cesium.Cartesian3()
   );
+
+  // POC 방식: ECEF 속도 벡터가 있으면 X축 = 진행방향으로 사용 (궤도 계산기 속도는 진행방향과 반대일 수 있으므로 반전)
+  const vEcef = options?.velocityEcef;
+  if (vEcef && typeof vEcef.x === 'number' && typeof vEcef.y === 'number' && typeof vEcef.z === 'number') {
+    const xAxisRaw = new Cesium.Cartesian3(-vEcef.x, -vEcef.y, -vEcef.z);
+    const xAxisNormalized = Cesium.Cartesian3.normalize(xAxisRaw, new Cesium.Cartesian3());
+    const yAxis = Cesium.Cartesian3.cross(
+      xAxisNormalized,
+      zAxis,
+      new Cesium.Cartesian3()
+    );
+    const yAxisNorm = Cesium.Cartesian3.normalize(yAxis, new Cesium.Cartesian3());
+    const xAxisCorrected = Cesium.Cartesian3.cross(
+      yAxisNorm,
+      zAxis,
+      new Cesium.Cartesian3()
+    );
+    const xAxisFinal = Cesium.Cartesian3.normalize(xAxisCorrected, new Cesium.Cartesian3());
+    return {
+      xAxis: xAxisFinal,
+      yAxis: yAxisNorm,
+      zAxis,
+    };
+  }
+
+  const az = options?.velocityAzimuthDeg;
+  const el = options?.velocityElevationDeg;
+  const useVelocity =
+    az !== undefined && el !== undefined && !Number.isNaN(az) && !Number.isNaN(el);
 
   const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
   const lon = cartographic.longitude;

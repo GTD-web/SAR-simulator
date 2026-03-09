@@ -15,6 +15,8 @@ export class SatelliteBusPayloadManager {
   private currentCartesian: any;
   private velocityAzimuthDeg: number | undefined;
   private velocityElevationDeg: number | undefined;
+  /** 정규화된 ECEF 속도 벡터 (POC 방식 X축 정렬용). 있으면 az/el 대신 사용 */
+  private velocityEcef: { x: number; y: number; z: number } | undefined;
   private axisEntities: {
     xAxis: any;
     yAxis: any;
@@ -60,6 +62,7 @@ export class SatelliteBusPayloadManager {
     this.currentCartesian = null;
     this.velocityAzimuthDeg = undefined;
     this.velocityElevationDeg = undefined;
+    this.velocityEcef = undefined;
     this.axisEntities = null;
     this.antennaAxisEntities = null;
     this.axisLength = 0.2; // 기본값: 0.2m
@@ -198,9 +201,12 @@ export class SatelliteBusPayloadManager {
   }
 
   /**
-   * 속도 방향 옵션 반환 (방위각/고도각이 모두 설정된 경우에만 유효)
+   * 속도 방향 옵션 반환. velocityEcef이 있으면 우선 사용 (POC 방식), 없으면 방위각/고도각
    */
   getVelocityOptions(): VelocityDirectionOptions | undefined {
+    if (this.velocityEcef) {
+      return { velocityEcef: this.velocityEcef };
+    }
     const az = this.velocityAzimuthDeg;
     const el = this.velocityElevationDeg;
     if (az === undefined || el === undefined || Number.isNaN(az) || Number.isNaN(el)) {
@@ -210,11 +216,32 @@ export class SatelliteBusPayloadManager {
   }
 
   /**
-   * 속도 방향 설정 (방위각·고도각 deg). 설정 후 BUS/안테나/축 갱신
+   * 속도 방향 설정 (ECEF 벡터, POC 방식). 정규화 후 저장하고 BUS/안테나/축 갱신
+   */
+  setVelocityDirectionEcef(vx: number, vy: number, vz: number): void {
+    const v = new Cesium.Cartesian3(vx, vy, vz);
+    const norm = Cesium.Cartesian3.normalize(v, new Cesium.Cartesian3());
+    const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
+    if (speed < 1e-6) return;
+    this.velocityEcef = { x: norm.x, y: norm.y, z: norm.z };
+    this.velocityAzimuthDeg = undefined;
+    this.velocityElevationDeg = undefined;
+    if (!this.position || !this.busEntity || !this.currentCartesian) return;
+    const cartographic = Cesium.Cartographic.fromCartesian(this.currentCartesian);
+    this.updatePosition({
+      longitude: Cesium.Math.toDegrees(cartographic.longitude),
+      latitude: Cesium.Math.toDegrees(cartographic.latitude),
+      altitude: cartographic.height,
+    });
+  }
+
+  /**
+   * 속도 방향 설정 (방위각·고도각 deg). 설정 시 velocityEcef은 초기화되고 az/el 사용
    */
   setVelocityDirection(azimuthDeg: number | undefined, elevationDeg: number | undefined): void {
     this.velocityAzimuthDeg = azimuthDeg;
     this.velocityElevationDeg = elevationDeg;
+    this.velocityEcef = undefined;
     if (!this.position || !this.busEntity || !this.currentCartesian) return;
     const cartographic = Cesium.Cartographic.fromCartesian(this.currentCartesian);
     this.updatePosition({
@@ -250,7 +277,8 @@ export class SatelliteBusPayloadManager {
       this.antennaEntity,
       this.axisLength,
       this.axisVisible,
-      this.getVelocityOptions()
+      this.getVelocityOptions(),
+      this.currentCartesian
     );
   }
 
@@ -279,13 +307,10 @@ export class SatelliteBusPayloadManager {
       this.currentCartesian = newCartesian.clone();
       this.position.setValue(newCartesian);
 
-      // BUS 방향 재계산
+      // BUS 방향 재계산 (X축 = 궤도 진행방향이 되도록 velocityOptions 반영)
       const busAxes = calculateBaseAxes(this.currentCartesian, this.getVelocityOptions());
       if (busAxes) {
-        const busOrientation = Cesium.Transforms.headingPitchRollQuaternion(
-          newCartesian,
-          new Cesium.HeadingPitchRoll(0, 0, 0)
-        );
+        const busOrientation = calculateBusOrientation(newCartesian, this.getVelocityOptions());
 
         if (this.busEntity) {
           this.busEntity.orientation = new Cesium.ConstantProperty(busOrientation);

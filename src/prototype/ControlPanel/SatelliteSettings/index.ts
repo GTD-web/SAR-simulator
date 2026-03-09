@@ -389,6 +389,13 @@ export class SatelliteSettings {
   }
 
   /**
+   * 위성 BUS/Payload 매니저 반환 (궤도 설정 등에서 위성 배치 시 사용)
+   */
+  getBusPayloadManager(): SatelliteBusPayloadManager | null {
+    return this.busPayloadManager;
+  }
+
+  /**
    * 위성 엔티티로 이동하는 카메라 애니메이션 취소
    */
   cancelCameraAnimation(): void {

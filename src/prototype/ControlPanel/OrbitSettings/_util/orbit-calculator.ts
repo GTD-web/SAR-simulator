@@ -141,6 +141,127 @@ function calculatePositionFromOrbitalElements(
 }
 
 /**
+ * 궤도 6요소로부터 특정 시간의 속도 벡터 계산 (ECI, m/s)
+ * timeSinceEpoch=0 은 궤도 epoch 시점.
+ */
+function calculateVelocityFromOrbitalElements(
+  elements: OrbitalElements,
+  timeSinceEpoch: number
+): { x: number; y: number; z: number } {
+  const a = elements.semiMajorAxis * 1000; // m
+  const e = elements.eccentricity;
+  const i = Cesium.Math.toRadians(elements.inclination);
+  const raan = Cesium.Math.toRadians(elements.raan);
+  const omega = Cesium.Math.toRadians(elements.argumentOfPerigee);
+
+  const n = Math.sqrt(EARTH_GM_KM * 1e9 / (elements.semiMajorAxis * elements.semiMajorAxis * elements.semiMajorAxis)); // rad/s
+  let trueAnomaly: number;
+  if (elements.trueAnomaly !== undefined) {
+    const meanAnomalyInitial = trueAnomalyToMeanAnomaly(Cesium.Math.toRadians(elements.trueAnomaly), e);
+    const meanAnomalyAtTime = meanAnomalyInitial + n * timeSinceEpoch;
+    trueAnomaly = meanAnomalyToTrueAnomaly(meanAnomalyAtTime, e);
+  } else if (elements.meanAnomaly !== undefined) {
+    const meanAnomalyRad = Cesium.Math.toRadians(elements.meanAnomaly);
+    const meanAnomalyAtTime = meanAnomalyRad + n * timeSinceEpoch;
+    trueAnomaly = meanAnomalyToTrueAnomaly(meanAnomalyAtTime, e);
+  } else {
+    throw new Error('진근점이각 또는 평균근점이각이 필요합니다.');
+  }
+
+  const p = elements.semiMajorAxis * (1 - e * e); // km
+  const vScale = Math.sqrt(EARTH_GM_KM / p) * 1000; // m/s
+  const sinNu = Math.sin(trueAnomaly);
+  const cosNu = Math.cos(trueAnomaly);
+  const xPerifocal = -vScale * sinNu;
+  const yPerifocal = vScale * (e + cosNu);
+
+  const cosOmega = Math.cos(raan);
+  const sinOmega = Math.sin(raan);
+  const cosI = Math.cos(i);
+  const sinI = Math.sin(i);
+  const cosW = Math.cos(omega);
+  const sinW = Math.sin(omega);
+
+  const x = (cosOmega * cosW - sinOmega * sinW * cosI) * xPerifocal +
+            (-cosOmega * sinW - sinOmega * cosW * cosI) * yPerifocal;
+  const y = (sinOmega * cosW + cosOmega * sinW * cosI) * xPerifocal +
+            (-sinOmega * sinW + cosOmega * cosW * cosI) * yPerifocal;
+  const z = (sinW * sinI) * xPerifocal + (cosW * sinI) * yPerifocal;
+
+  return { x, y, z };
+}
+
+/** epoch 시각(지구 자전 0)에서의 위치·고도·속도 방향 (위성 X축 = 진행 방향용) */
+export interface PositionAndVelocityAtEpoch {
+  longitude: number;
+  latitude: number;
+  altitude: number;
+  velocityAzimuthDeg: number;
+  velocityElevationDeg: number;
+  /** 정규화된 ECEF 속도 벡터 (단위 벡터). POC 방식 X축 정렬용 */
+  velocityEcef: { x: number; y: number; z: number };
+}
+
+/**
+ * 궤도 epoch 시각(timeSinceEpoch=0)에서의 위치(경위도·고도)와 속도 방향(방위각·고도각) 반환.
+ * 위성 로컬 X축을 진행 방향으로 맞출 때 사용.
+ */
+export function getPositionAndVelocityAtEpoch(
+  elements: OrbitalElements,
+  epochTime: Cesium.JulianDate
+): PositionAndVelocityAtEpoch | null {
+  try {
+    const timeSinceEpoch = 0;
+    const eciPos = calculatePositionFromOrbitalElements(elements, timeSinceEpoch);
+    const eciVel = calculateVelocityFromOrbitalElements(elements, timeSinceEpoch);
+    const earthRotationAngleDegrees = 0;
+    const geodetic = eciToGeodetic(eciPos.x, eciPos.y, eciPos.z, epochTime, earthRotationAngleDegrees);
+
+    const lonRad = Cesium.Math.toRadians(geodetic.longitude);
+    const latRad = Cesium.Math.toRadians(geodetic.latitude);
+    const sinLon = Math.sin(lonRad);
+    const cosLon = Math.cos(lonRad);
+    const sinLat = Math.sin(latRad);
+    const cosLat = Math.cos(latRad);
+    const ecefX = eciPos.x;
+    const ecefY = eciPos.y;
+    const ecefZ = eciPos.z;
+    const eastX = -sinLon;
+    const eastY = cosLon;
+    const eastZ = 0;
+    const northX = -sinLat * cosLon;
+    const northY = -sinLat * sinLon;
+    const northZ = cosLat;
+    const upX = cosLat * cosLon;
+    const upY = cosLat * sinLon;
+    const upZ = sinLat;
+    const vEast = eciVel.x * eastX + eciVel.y * eastY + eciVel.z * eastZ;
+    const vNorth = eciVel.x * northX + eciVel.y * northY + eciVel.z * northZ;
+    const vUp = eciVel.x * upX + eciVel.y * upY + eciVel.z * upZ;
+    const speed = Math.sqrt(vEast * vEast + vNorth * vNorth + vUp * vUp);
+    if (speed < 1e-6) {
+      return null;
+    }
+    const velocityAzimuthDeg = Cesium.Math.toDegrees(Math.atan2(vNorth, vEast));
+    const velocityElevationDeg = Cesium.Math.toDegrees(Math.asin(vUp / speed));
+
+    const vel = new Cesium.Cartesian3(eciVel.x, eciVel.y, eciVel.z);
+    const velocityEcefNorm = Cesium.Cartesian3.normalize(vel, new Cesium.Cartesian3());
+
+    return {
+      longitude: geodetic.longitude,
+      latitude: geodetic.latitude,
+      altitude: geodetic.altitude,
+      velocityAzimuthDeg,
+      velocityElevationDeg,
+      velocityEcef: { x: velocityEcefNorm.x, y: velocityEcefNorm.y, z: velocityEcefNorm.z },
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 목표 (lat, lon)에서 epoch 시 위성이 있도록 하는 진근점이각(deg)을 역산
  * epoch 시 ECI=ECEF(회전 0)이므로, ECI 위치의 지리좌표가 (lon, lat)가 되는 ν를 탐색
  * @param elements 궤도 6요소 (trueAnomaly/meanAnomaly는 무시, a,e,i,raan,argumentOfPerigee 사용)

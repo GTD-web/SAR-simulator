@@ -145,14 +145,16 @@ export function createAxisEntities(
 
 /**
  * 안테나 XYZ 축 엔티티 생성 (BUS와 동일한 방향 사용, 안테나 위치에서 시작)
- * @param velocityOptions 속도 방향(방위각/고도각 deg). 없으면 기존 동작
+ * @param velocityOptions 속도 방향(방위각/고도각 또는 ECEF). 없으면 기존 동작
+ * @param busCartesian 버스 위치(ECEF). 주어지면 이 위치에서 축 방향을 계산해 BUS와 동일하게 함
  */
 export function createAntennaAxisEntities(
   viewer: any,
   antennaEntity: any,
   axisLength: number,
   axisVisible: boolean,
-  velocityOptions?: VelocityDirectionOptions
+  velocityOptions?: VelocityDirectionOptions,
+  busCartesian?: any
 ): {
   xAxis: any;
   yAxis: any;
@@ -166,8 +168,8 @@ export function createAntennaAxisEntities(
     const time = viewer.clock.currentTime;
     const center = antennaEntity.position?.getValue(time);
     if (!center) return { center: null, axes: null };
-    // BUS와 동일한 방향의 축 계산 (안테나 위치에서)
-    const axes = calculateBaseAxes(center, velocityOptions);
+    // BUS와 동일한 방향: 축은 버스 위치에서 계산하고, 선만 안테나 중심에서 그림
+    const axes = calculateBaseAxes(busCartesian || center, velocityOptions);
     return { center, axes };
   };
 

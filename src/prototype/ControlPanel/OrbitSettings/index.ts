@@ -1,9 +1,16 @@
 import {
   calculateOrbitPath,
   calculateOrbitalPeriod,
-  computeInitialTrueAnomalyFromPosition,
-  OrbitalElements,
+  getPositionAndVelocityAtEpoch,
+  type OrbitalElements,
+  type PositionAndVelocityAtEpoch,
 } from './_util/orbit-calculator.js';
+import { flyToPosition, setupCameraAngle } from '../SatelliteSettings/_util/camera-manager.js';
+
+export interface OrbitSettingsOptions {
+  /** 위성 설정에서 생성한 위성 엔티티를 배치할 때 사용. 없으면 배치하지 않음 */
+  busPayloadManager?: import('../SatelliteSettings/SatelliteBusPayloadManager/index.js').SatelliteBusPayloadManager | null;
+}
 
 /**
  * OrbitSettings - Orbit settings tab management class
@@ -11,22 +18,26 @@ import {
 export class OrbitSettings {
   private container: HTMLElement | null;
   private viewer: any;
-  private orbitEntity: any;
+  private busPayloadManager: import('../SatelliteSettings/SatelliteBusPayloadManager/index.js').SatelliteBusPayloadManager | null;
   private updateDebounceTimer: number | null;
+  /** 현재 위성 진행 30분 구간 궤도 경로 폴리라인 (XYZ 축 참고용) */
+  private orbitPathEntity: any;
 
   constructor() {
     this.container = null;
     this.viewer = null;
-    this.orbitEntity = null;
+    this.busPayloadManager = null;
     this.updateDebounceTimer = null;
+    this.orbitPathEntity = null;
   }
 
   /**
    * Initialize orbit settings tab
    */
-  initialize(container: HTMLElement, viewer?: any): void {
+  initialize(container: HTMLElement, viewer?: any, options?: OrbitSettingsOptions): void {
     this.container = container;
     this.viewer = viewer || null;
+    this.busPayloadManager = options?.busPayloadManager ?? null;
     this.render();
   }
 
@@ -43,25 +54,7 @@ export class OrbitSettings {
     const form = document.createElement('div');
     form.style.marginTop = '15px';
 
-    // 초기 위치 / 초기 시각 (궤도 그리기 시작점) — 기본값: 서울
-    const initialLatitudeInput = this.createInputField(
-      form,
-      '초기 위치 위도 (deg):',
-      'prototypeOrbitInitialLatitude',
-      '37.5665',
-      '-90',
-      '90',
-      '0.1'
-    );
-    const initialLongitudeInput = this.createInputField(
-      form,
-      '초기 위치 경도 (deg):',
-      'prototypeOrbitInitialLongitude',
-      '126.978',
-      '-180',
-      '180',
-      '0.1'
-    );
+    // 초기 시각 (해당 시각의 궤도 위치에 위성 설정의 모델이 배치됨, 진행방향=위성 X축)
     const initialTimeLabel = document.createElement('label');
     initialTimeLabel.style.marginTop = '10px';
     initialTimeLabel.style.display = 'block';
@@ -179,8 +172,6 @@ export class OrbitSettings {
 
     // 입력 필드에 change 이벤트 추가 (자동 업데이트)
     const inputFields = [
-      initialLatitudeInput.querySelector('input'),
-      initialLongitudeInput.querySelector('input'),
       initialTimeInput,
       semiMajorAxisInput.querySelector('input'),
       eccentricityInput.querySelector('input'),
@@ -204,11 +195,10 @@ export class OrbitSettings {
     section.appendChild(form);
     this.container.appendChild(section);
 
-    // 초기화 시 자동으로 궤도 그리기 (alert 없이)
+    // 초기화 시 해당 시각 위치에 위성 배치 (alert 없이)
     if (this.viewer) {
-      // Cesium 초기화 완료 대기 후 자동 그리기
       setTimeout(() => {
-        this.drawOrbit(false); // 자동 그리기는 alert 표시 안 함
+        this.applyOrbitToSatellite(false);
       }, 500);
     }
   }
@@ -222,7 +212,7 @@ export class OrbitSettings {
     }
     
     this.updateDebounceTimer = window.setTimeout(() => {
-      this.drawOrbit(false); // 값 변경 시 alert 표시 안 함
+      this.applyOrbitToSatellite(false);
       this.updateDebounceTimer = null;
     }, 500); // 500ms 디바운스
   }
@@ -262,10 +252,147 @@ export class OrbitSettings {
   }
 
   /**
-   * 궤도 6요소로부터 궤도 경로 그리기
+   * 궤도 설정 탭 진입 시 해당 시각의 궤도 위치로 카메라 이동.
+   * 진입 시 위성 엔티티가 있으면 먼저 해당 궤도 위치에 배치한 뒤 카메라를 이동한다.
+   * 궤도 위치를 구할 수 없으면 위성 엔티티로, 없으면 지구 전경으로 이동.
+   */
+  flyToOrbitPosition(): void {
+    if (!this.viewer) return;
+
+    const result = this.getOrbitPositionFromForm();
+    const busEntity = this.busPayloadManager?.getBusEntity();
+
+    // 위성 엔티티가 있고 궤도 위치를 구할 수 있으면, 먼저 해당 궤도 위치에 위성 배치 (POC 방식: ECEF 속도 벡터로 X축 정렬)
+    if (result && this.busPayloadManager && busEntity) {
+      this.busPayloadManager.setVelocityDirectionEcef(result.velocityEcef.x, result.velocityEcef.y, result.velocityEcef.z);
+      this.busPayloadManager.updatePosition({
+        longitude: result.longitude,
+        latitude: result.latitude,
+        altitude: result.altitude,
+      });
+    }
+
+    // 진행 30분 궤도 경로 그리기 (XYZ 축 참고용)
+    this.drawOrbitPath30Min();
+
+    if (result) {
+      const position = Cesium.Cartesian3.fromDegrees(
+        result.longitude,
+        result.latitude,
+        result.altitude
+      );
+      flyToPosition(this.viewer, position);
+      return;
+    }
+
+    if (busEntity) {
+      setupCameraAngle(this.viewer, busEntity);
+      return;
+    }
+
+    if (this.viewer.camera._flight && this.viewer.camera._flight.isActive()) {
+      this.viewer.camera.cancelFlight();
+    }
+    this.viewer.trackedEntity = undefined;
+    this.viewer.camera.flyHome(1.5);
+  }
+
+  /**
+   * 현재 폼 값으로 궤도 6요소·epoch 시각을 구성해 해당 시각의 위치 반환 (실패 시 null)
+   */
+  private getOrbitPositionFromForm(): PositionAndVelocityAtEpoch | null {
+    const parsed = this.getElementsAndEpochTimeFromForm();
+    if (!parsed) return null;
+    return getPositionAndVelocityAtEpoch(parsed.elements, parsed.epochTime);
+  }
+
+  /**
+   * 폼에서 궤도 6요소와 초기 시각(epoch)을 읽어 반환. 유효하지 않으면 null.
+   */
+  private getElementsAndEpochTimeFromForm(): { elements: OrbitalElements; epochTime: Cesium.JulianDate } | null {
+    const semiMajorAxis = parseFloat(
+      (document.getElementById('prototypeOrbitSemiMajorAxis') as HTMLInputElement)?.value || '6878.137'
+    );
+    const eccentricity = parseFloat(
+      (document.getElementById('prototypeOrbitEccentricity') as HTMLInputElement)?.value || '0.0'
+    );
+    if (semiMajorAxis < 6378.137 || eccentricity < 0 || eccentricity >= 1) {
+      return null;
+    }
+    const inclination = parseFloat(
+      (document.getElementById('prototypeOrbitInclination') as HTMLInputElement)?.value || '98.0'
+    );
+    const raan = parseFloat(
+      (document.getElementById('prototypeOrbitRAAN') as HTMLInputElement)?.value || '0.0'
+    );
+    const argumentOfPerigee = parseFloat(
+      (document.getElementById('prototypeOrbitArgumentOfPerigee') as HTMLInputElement)?.value || '0.0'
+    );
+    const anomalyType = (document.getElementById('prototypeOrbitAnomalyType') as HTMLSelectElement)?.value || 'true';
+    const anomaly = parseFloat(
+      (document.getElementById('prototypeOrbitAnomaly') as HTMLInputElement)?.value || '0.0'
+    );
+    const elements: OrbitalElements = {
+      semiMajorAxis,
+      eccentricity,
+      inclination,
+      raan,
+      argumentOfPerigee,
+    };
+    if (anomalyType === 'true') {
+      elements.trueAnomaly = anomaly;
+    } else {
+      elements.meanAnomaly = anomaly;
+    }
+    const initialTimeStr = (document.getElementById('prototypeOrbitInitialTime') as HTMLInputElement)?.value?.trim();
+    const initialTimeValid = initialTimeStr !== undefined && initialTimeStr !== '' && !Number.isNaN(new Date(initialTimeStr).getTime());
+    const epochTime = initialTimeValid
+      ? Cesium.JulianDate.fromDate(new Date(initialTimeStr!))
+      : this.viewer?.clock?.currentTime ?? Cesium.JulianDate.now();
+    return { elements, epochTime };
+  }
+
+  /**
+   * 현재 위성 진행 30분 구간 궤도 경로만 그림 (XYZ 축·진행방향 참고용)
+   */
+  private drawOrbitPath30Min(): void {
+    this.clearOrbitPath();
+    if (!this.viewer) return;
+
+    const parsed = this.getElementsAndEpochTimeFromForm();
+    if (!parsed) return;
+
+    const { elements, epochTime } = parsed;
+    const durationHours = 0.5; // 30분
+    const positions = calculateOrbitPath(elements, epochTime, durationHours, 1);
+    if (positions.length === 0) return;
+
+    this.orbitPathEntity = this.viewer.entities.add({
+      name: '위성 진행 30분 경로 (참고용)',
+      polyline: {
+        positions: positions,
+        width: 2,
+        material: Cesium.Color.ORANGE.withAlpha(0.9),
+        clampToGround: false,
+        arcType: Cesium.ArcType.NONE,
+        show: true,
+      },
+    });
+  }
+
+  private clearOrbitPath(): void {
+    if (this.orbitPathEntity && this.viewer) {
+      this.viewer.entities.remove(this.orbitPathEntity);
+      this.orbitPathEntity = null;
+    }
+  }
+
+  /**
+   * 궤도 6요소·초기 시각으로 해당 시각의 위치에 위성 배치 (진행방향 = 위성 X축)
+   * 궤도선은 그리지 않음.
    * @param showAlert - alert를 표시할지 여부 (기본값: true)
    */
-  private drawOrbit(showAlert: boolean = true): void {
+  private applyOrbitToSatellite(showAlert: boolean = true): void {
     if (!this.viewer) {
       if (showAlert) {
         alert('Cesium 뷰어가 초기화되지 않았습니다.');
@@ -273,8 +400,14 @@ export class OrbitSettings {
       return;
     }
 
+    if (!this.busPayloadManager || !this.busPayloadManager.getBusEntity()) {
+      if (showAlert) {
+        alert('위성 설정 탭에서 먼저 위성을 생성해주세요.');
+      }
+      return;
+    }
+
     try {
-      // 입력값 읽기
       const semiMajorAxis = parseFloat(
         (document.getElementById('prototypeOrbitSemiMajorAxis') as HTMLInputElement)?.value || '6878.137'
       );
@@ -295,7 +428,6 @@ export class OrbitSettings {
         (document.getElementById('prototypeOrbitAnomaly') as HTMLInputElement)?.value || '0.0'
       );
 
-      // 입력값 검증
       if (semiMajorAxis < 6378.137) {
         if (showAlert) {
           alert('긴반지름은 지구 반지름(6378.137km)보다 커야 합니다.');
@@ -309,15 +441,6 @@ export class OrbitSettings {
         return;
       }
 
-      // 궤도 주기 계산
-      const orbitalPeriodHours = calculateOrbitalPeriod(semiMajorAxis);
-      
-      // 지구 표면 전체를 순회하기 위해 충분한 시간 계산
-      // 지구 자전 주기(24시간)와 궤도 주기를 고려하여 여러 주기 그리기
-      // 최소 24시간 이상 그리기 (지구 자전 1회)
-      const durationHours = Math.max(24, orbitalPeriodHours * 2); // 최소 2주기 또는 24시간
-
-      // 궤도 6요소 구성
       const elements: OrbitalElements = {
         semiMajorAxis,
         eccentricity,
@@ -325,85 +448,46 @@ export class OrbitSettings {
         raan,
         argumentOfPerigee,
       };
-
       if (anomalyType === 'true') {
         elements.trueAnomaly = anomaly;
       } else {
         elements.meanAnomaly = anomaly;
       }
 
-      // 초기 위치/시간 사용 여부: 세 값이 모두 유효하면 사용
-      const initialLatStr = (document.getElementById('prototypeOrbitInitialLatitude') as HTMLInputElement)?.value?.trim();
-      const initialLonStr = (document.getElementById('prototypeOrbitInitialLongitude') as HTMLInputElement)?.value?.trim();
       const initialTimeStr = (document.getElementById('prototypeOrbitInitialTime') as HTMLInputElement)?.value?.trim();
-      const initialLat = initialLatStr !== undefined && initialLatStr !== '' ? parseFloat(initialLatStr) : NaN;
-      const initialLon = initialLonStr !== undefined && initialLonStr !== '' ? parseFloat(initialLonStr) : NaN;
       const initialTimeValid = initialTimeStr !== undefined && initialTimeStr !== '' && !Number.isNaN(new Date(initialTimeStr).getTime());
-      const useInitialPosition = !Number.isNaN(initialLat) && !Number.isNaN(initialLon) && initialTimeValid;
+      const epochTime = initialTimeValid
+        ? Cesium.JulianDate.fromDate(new Date(initialTimeStr!))
+        : this.viewer.clock.currentTime;
 
-      let startTime: any;
-      if (useInitialPosition) {
-        startTime = Cesium.JulianDate.fromDate(new Date(initialTimeStr!));
-        const computedNu = computeInitialTrueAnomalyFromPosition(elements, initialLat, initialLon);
-        if (computedNu !== null) {
-          elements.trueAnomaly = computedNu;
-          delete elements.meanAnomaly;
-        }
-      } else {
-        startTime = this.viewer.clock.currentTime;
-      }
-
-      // 기존 궤도 제거
-      this.clearOrbit();
-
-      console.log(`[OrbitSettings] 궤도 그리기 시작: ${durationHours.toFixed(2)}시간 (궤도 주기: ${orbitalPeriodHours.toFixed(2)}시간)`);
-
-      // 궤도 경로 계산 (1분 간격으로 샘플링)
-      const positions = calculateOrbitPath(elements, startTime, durationHours, 1);
-
-      if (positions.length === 0) {
+      const result = getPositionAndVelocityAtEpoch(elements, epochTime);
+      if (!result) {
         if (showAlert) {
-          alert('궤도 경로 계산에 실패했습니다.');
+          alert('해당 시각의 궤도 위치·속도 계산에 실패했습니다.');
         }
         return;
       }
 
-      // 궤도 엔티티 생성
-      this.orbitEntity = this.viewer.entities.add({
-        name: '위성 궤도',
-        polyline: {
-          positions: positions,
-          width: 3,
-          material: new Cesium.PolylineGlowMaterialProperty({
-            glowPower: 0.3,
-            color: Cesium.Color.CYAN.withAlpha(0.8),
-          }),
-          clampToGround: false,
-          arcType: Cesium.ArcType.GEODESIC,
-          show: true,
-        },
+      this.busPayloadManager.setVelocityDirectionEcef(result.velocityEcef.x, result.velocityEcef.y, result.velocityEcef.z);
+      this.busPayloadManager.updatePosition({
+        longitude: result.longitude,
+        latitude: result.latitude,
+        altitude: result.altitude,
       });
 
-      console.log(`[OrbitSettings] 궤도 그리기 완료: ${positions.length}개 점`);
+      // 진행 30분 궤도 경로 그리기 (XYZ 축 참고용)
+      this.drawOrbitPath30Min();
+
+      const periodHours = calculateOrbitalPeriod(semiMajorAxis);
+      console.log(`[OrbitSettings] 위성 배치 완료: (${result.longitude.toFixed(4)}°, ${result.latitude.toFixed(4)}°), 고도 ${(result.altitude / 1000).toFixed(2)} km, 진행방향=X축`);
       if (showAlert) {
-        alert(`궤도가 그려졌습니다.\n궤도 주기: ${orbitalPeriodHours.toFixed(2)}시간\n그린 기간: ${durationHours.toFixed(2)}시간`);
+        alert(`해당 시각의 궤도 위치에 위성을 배치했습니다.\n진행 방향이 위성 X축과 일치합니다.\n궤도 주기: ${periodHours.toFixed(2)}시간`);
       }
     } catch (error: any) {
-      console.error('[OrbitSettings] 궤도 그리기 오류:', error);
+      console.error('[OrbitSettings] 위성 배치 오류:', error);
       if (showAlert) {
-        alert('궤도 그리기 실패: ' + error.message);
+        alert('위성 배치 실패: ' + error.message);
       }
-    }
-  }
-
-  /**
-   * 궤도 경로 지우기
-   */
-  private clearOrbit(): void {
-    if (this.orbitEntity && this.viewer) {
-      this.viewer.entities.remove(this.orbitEntity);
-      this.orbitEntity = null;
-      console.log('[OrbitSettings] 궤도 제거됨');
     }
   }
 
@@ -411,17 +495,16 @@ export class OrbitSettings {
    * Cleanup orbit settings
    */
   cleanup(): void {
-    // 디바운스 타이머 정리
     if (this.updateDebounceTimer !== null) {
       clearTimeout(this.updateDebounceTimer);
       this.updateDebounceTimer = null;
     }
-    
-    this.clearOrbit();
+    this.clearOrbitPath();
     if (this.container) {
       this.container.innerHTML = '';
     }
     this.container = null;
     this.viewer = null;
+    this.busPayloadManager = null;
   }
 }

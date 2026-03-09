@@ -119,7 +119,9 @@ export class ControlPanelManager {
     this.satelliteSettings.initialize(satelliteTabContent, viewer);
 
     this.orbitSettings = new OrbitSettings();
-    this.orbitSettings.initialize(orbitTabContent, viewer);
+    this.orbitSettings.initialize(orbitTabContent, viewer, {
+      busPayloadManager: this.satelliteSettings.getBusPayloadManager(),
+    });
 
     const targetOptions: TargetSettingsOptions = {
       onRegionInfoFetched: options?.onRegionInfoFetched ?? undefined,
@@ -163,13 +165,12 @@ export class ControlPanelManager {
           this.satelliteSettings.flyToSatelliteEntity();
         }
 
-        // 궤도 설정 탭 클릭 시 지구로 카메라 이동
+        // 궤도 설정 탭 클릭 시 해당 시각 궤도 위치로 카메라 이동
         if (targetTab === 'orbit' && this.viewer) {
-          // 위성 엔티티로 이동하는 애니메이션 취소
           if (this.satelliteSettings) {
             this.satelliteSettings.cancelCameraAnimation();
           }
-          this.flyToEarth();
+          this.orbitSettings?.flyToOrbitPosition();
         }
 
         // 타겟 설정 탭 클릭 시 해당 타겟으로 카메라 이동 + 우측 지역 정보 패널 표시 (JSON은 '지역 정보 가져오기' 버튼으로만 생성)

@@ -62,20 +62,29 @@ export function setupCameraAngle(
     return null;
   }
 
-  // 공통 함수로 카메라 거리 계산
+  return flyToPosition(viewer, busPosition);
+}
+
+/**
+ * 카메라를 지정한 Cartesian3 위치로 이동 (위성 설정과 동일한 시점/거리)
+ * @returns setTimeout 타이머 ID (취소 가능하도록)
+ */
+export function flyToPosition(viewer: any, position: Cesium.Cartesian3): number | null {
+  if (!viewer || !position) {
+    return null;
+  }
+
+  viewer.trackedEntity = undefined;
   const cameraRange = calculateCameraRange();
 
   try {
-    // 기존 카메라 애니메이션 취소
     if (viewer.camera._flight && viewer.camera._flight.isActive()) {
       viewer.camera.cancelFlight();
     }
 
-    // 약간의 지연 후 카메라 이동 (기존 애니메이션 완전 종료 대기)
     const timerId = window.setTimeout(() => {
-      // flyTo를 사용하여 부드럽게 이동
       viewer.camera.flyTo({
-        destination: busPosition,
+        destination: position,
         orientation: {
           heading: Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
           pitch: Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
@@ -83,9 +92,8 @@ export function setupCameraAngle(
         },
         duration: CAMERA.ANIMATION_DURATION,
         complete: () => {
-          // 이동 후 정확한 거리로 조정
           viewer.camera.lookAt(
-            busPosition,
+            position,
             new Cesium.HeadingPitchRange(
               Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
               Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
@@ -98,11 +106,10 @@ export function setupCameraAngle(
 
     return timerId;
   } catch (error) {
-    console.error('[setupCameraAngle] 카메라 이동 오류:', error);
-    // flyTo 실패 시 lookAt으로 폴백
+    console.error('[flyToPosition] 카메라 이동 오류:', error);
     try {
       viewer.camera.lookAt(
-        busPosition,
+        position,
         new Cesium.HeadingPitchRange(
           Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
           Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
@@ -110,7 +117,7 @@ export function setupCameraAngle(
         )
       );
     } catch (fallbackError) {
-      console.error('[setupCameraAngle] lookAt 폴백도 실패:', fallbackError);
+      console.error('[flyToPosition] lookAt 폴백도 실패:', fallbackError);
     }
     return null;
   }
