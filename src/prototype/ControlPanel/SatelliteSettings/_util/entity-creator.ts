@@ -1,5 +1,5 @@
 import { SatelliteBusPayloadManager } from '../SatelliteBusPayloadManager/index.js';
-import { parseSatelliteBasicInfo, parsePositionInputs, parseBusDimensionsInputs, parseAntennaDimensionsInputs, parseAntennaGapInput, parseAntennaOrientationInputs } from './input-parser.js';
+import { parseSatelliteBasicInfo, parsePositionInputs, parseBusDimensionsInputs, parseBusOrientationInputs, parseAntennaDimensionsInputs, parseAntennaGapInput, parseAntennaOrientationInputs } from './input-parser.js';
 import { CAMERA, DEFAULT_BUS_DIMENSIONS_MM } from '../constants.js';
 import { setupCameraAngle as setupCamera } from './camera-manager.js';
 
@@ -90,6 +90,8 @@ export function createSatelliteEntity(
     // km를 미터로 변환 (Cesium은 미터 단위 사용)
     const altitude = position.altitudeKm * 1000;
 
+    const busOrientation = parseBusOrientationInputs();
+
     busPayloadManager.createSatellite(
       name,
       { longitude: position.longitude, latitude: position.latitude, altitude },
@@ -104,7 +106,8 @@ export function createSatelliteEntity(
         initialElevationAngle: antennaOrientation.initialElevationAngle,
         initialAzimuthAngle: antennaOrientation.initialAzimuthAngle,
       },
-      antennaGap
+      antennaGap,
+      busOrientation ?? undefined
     );
 
     if (showAlert) {

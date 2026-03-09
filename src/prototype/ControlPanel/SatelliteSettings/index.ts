@@ -5,12 +5,14 @@ import { renderSatelliteSettingsForm, FormRendererCallbacks } from './_ui/form-r
 import { updateEntity } from './_util/entity-updater.js';
 import { createSatelliteEntity } from './_util/entity-creator.js';
 import { getDirectionForInputId } from './_util/direction-mapper.js';
+import { parseBusOrientationInputs } from './_util/input-parser.js';
 import { waitForCameraReady, setupCameraAngle, setupCanvasFocus } from './_util/camera-manager.js';
 import { 
   TIMER, 
   DEFAULT_POSITION, 
   DEFAULT_BUS_DIMENSIONS_M, 
   DEFAULT_BUS_DIMENSIONS_MM,
+  DEFAULT_BUS_ORIENTATION,
   DEFAULT_ANTENNA_DIMENSIONS_M, 
   DEFAULT_ANTENNA_GAP_M, 
   DEFAULT_ANTENNA_ORIENTATION,
@@ -116,7 +118,8 @@ export class SatelliteSettings {
           initialElevationAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_ELEVATION,
           initialAzimuthAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_AZIMUTH,
         },
-        DEFAULT_ANTENNA_GAP_M
+        DEFAULT_ANTENNA_GAP_M,
+        DEFAULT_BUS_ORIENTATION
       );
 
       this.busPayloadManager.setVelocityDirectionEcef(
@@ -412,6 +415,8 @@ export class SatelliteSettings {
       const altitudeKm = parseFloat(altInput) || DEFAULT_POSITION.ALTITUDE_KM;
       const altitude = altitudeKm * 1000;
 
+      const busOrientation = parseBusOrientationInputs() ?? DEFAULT_BUS_ORIENTATION;
+
       this.busPayloadManager.createSatellite(
         DEFAULT_SATELLITE_INFO.NAME,
         { longitude, latitude, altitude },
@@ -430,7 +435,8 @@ export class SatelliteSettings {
           initialElevationAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_ELEVATION,
           initialAzimuthAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_AZIMUTH,
         },
-        DEFAULT_ANTENNA_GAP_M
+        DEFAULT_ANTENNA_GAP_M,
+        busOrientation
       );
     } catch (error) {
       console.error('[SatelliteSettings] 엔티티 생성 오류:', error);

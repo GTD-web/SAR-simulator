@@ -44,6 +44,16 @@ export const DEFAULT_BUS_DIMENSIONS_MM = {
   HEIGHT: 840,
 } as const;
 
+// 기본 BUS 방향 (도) - createSatellite busOrientation 형식과 동일
+export const DEFAULT_BUS_ORIENTATION = {
+  /** Roll 각도 (도) - X축 회전 */
+  rollAngle: 45,
+  /** Pitch 각도 (도) - Y축 회전 */
+  pitchAngle: 0,
+  /** Yaw 각도 (도) - Z축 회전 */
+  yawAngle: 0,
+} as const;
+
 // 기본 BUS 크기 (미터) - Cesium에서 사용
 export const DEFAULT_BUS_DIMENSIONS_M = {
   /** BUS 길이 (m) */
@@ -83,7 +93,7 @@ export const DEFAULT_ANTENNA_GAP_M = DEFAULT_ANTENNA_GAP_MM / 1000;
 // 기본 안테나 방향 (도)
 export const DEFAULT_ANTENNA_ORIENTATION = {
   /** Roll 각도 (도) */
-  ROLL: 45,
+  ROLL: 0,
   /** Pitch 각도 (도) */
   PITCH: 0,
   /** Yaw 각도 (도) */

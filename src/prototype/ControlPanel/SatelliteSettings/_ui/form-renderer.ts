@@ -176,6 +176,42 @@ export function renderSatelliteSettingsForm(
   );
   busSection.appendChild(busHeightInput);
 
+  const busRollInput = createInputField(
+    'BUS Roll (도):',
+    'prototypeBusRoll',
+    'number',
+    'X축 회전',
+    '45',
+    callbacks.onInputFocus,
+    callbacks.onInputBlur,
+    callbacks.onInputChange
+  );
+  busSection.appendChild(busRollInput);
+
+  const busPitchInput = createInputField(
+    'BUS Pitch (도):',
+    'prototypeBusPitch',
+    'number',
+    'Y축 회전',
+    '0',
+    callbacks.onInputFocus,
+    callbacks.onInputBlur,
+    callbacks.onInputChange
+  );
+  busSection.appendChild(busPitchInput);
+
+  const busYawInput = createInputField(
+    'BUS Yaw (도):',
+    'prototypeBusYaw',
+    'number',
+    'Z축 회전',
+    '0',
+    callbacks.onInputFocus,
+    callbacks.onInputBlur,
+    callbacks.onInputChange
+  );
+  busSection.appendChild(busYawInput);
+
   form.appendChild(busSection);
 
   // 버스-안테나 간격 설정 섹션 (BUS 설정과 안테나 설정 사이)
@@ -256,7 +292,7 @@ export function renderSatelliteSettingsForm(
     'prototypeAntennaRoll',
     'number',
     'x축 회전',
-    '45',
+    '0',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
     callbacks.onInputChange

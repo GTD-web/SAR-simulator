@@ -2,10 +2,12 @@ import {
   calculateBaseAxes,
   type VelocityDirectionOptions,
 } from './base-axes-calculator.js';
-import { applyBusRollToAxes } from '../_ui/entity-creator.js';
+import { applyBusRollPitchYawToAxes } from '../_ui/entity-creator.js';
 
 export interface AxisPositionOptions extends VelocityDirectionOptions {
-  /** BUS Roll 각도 (도). 있으면 축 방향에 roll 반영 */
+  /** BUS 방향 (도). 있으면 축 방향에 Roll/Pitch/Yaw 반영 */
+  busOrientation?: { rollAngle: number; pitchAngle: number; yawAngle: number };
+  /** @deprecated busOrientation 사용 권장 */
   busRollDeg?: number;
 }
 
@@ -35,9 +37,13 @@ export function getAxisLinePositions(
   if (!baseAxes) {
     return [];
   }
-  const axes = (typeof options?.busRollDeg === 'number' && options.busRollDeg !== 0)
-    ? applyBusRollToAxes(baseAxes, options.busRollDeg)
-    : baseAxes;
+  let axes = baseAxes;
+  if (options?.busOrientation) {
+    const bo = options.busOrientation;
+    axes = applyBusRollPitchYawToAxes(baseAxes, bo.rollAngle, bo.pitchAngle, bo.yawAngle);
+  } else if (typeof options?.busRollDeg === 'number' && options.busRollDeg !== 0) {
+    axes = applyBusRollPitchYawToAxes(baseAxes, options.busRollDeg, 0, 0);
+  }
 
   const start = cartesian;
   let direction: any;
@@ -92,9 +98,13 @@ export function getAxisEndPosition(
   if (!baseAxes) {
     return undefined;
   }
-  const axes = (typeof options?.busRollDeg === 'number' && options.busRollDeg !== 0)
-    ? applyBusRollToAxes(baseAxes, options.busRollDeg)
-    : baseAxes;
+  let axes = baseAxes;
+  if (options?.busOrientation) {
+    const bo = options.busOrientation;
+    axes = applyBusRollPitchYawToAxes(baseAxes, bo.rollAngle, bo.pitchAngle, bo.yawAngle);
+  } else if (typeof options?.busRollDeg === 'number' && options.busRollDeg !== 0) {
+    axes = applyBusRollPitchYawToAxes(baseAxes, options.busRollDeg, 0, 0);
+  }
 
   const start = cartesian;
   let direction: any;

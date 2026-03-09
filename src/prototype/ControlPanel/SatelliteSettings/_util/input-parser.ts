@@ -67,6 +67,37 @@ export function parseBusDimensionsInputs(): {
 }
 
 /**
+ * BUS 방향 파싱
+ */
+export function parseBusOrientationInputs(): {
+  rollAngle: number;
+  pitchAngle: number;
+  yawAngle: number;
+} | null {
+  const busRollInput = (document.getElementById('prototypeBusRoll') as HTMLInputElement)?.value;
+  const busPitchInput = (document.getElementById('prototypeBusPitch') as HTMLInputElement)?.value;
+  const busYawInput = (document.getElementById('prototypeBusYaw') as HTMLInputElement)?.value;
+
+  if (busRollInput === undefined || busPitchInput === undefined || busYawInput === undefined) {
+    return null;
+  }
+
+  const busRoll = parseFloat(busRollInput || '0');
+  const busPitch = parseFloat(busPitchInput || '0');
+  const busYaw = parseFloat(busYawInput || '0');
+
+  if (isNaN(busRoll) || isNaN(busPitch) || isNaN(busYaw)) {
+    return null;
+  }
+
+  return {
+    rollAngle: busRoll,
+    pitchAngle: busPitch,
+    yawAngle: busYaw
+  };
+}
+
+/**
  * 안테나 크기 파싱
  */
 export function parseAntennaDimensionsInputs(): {

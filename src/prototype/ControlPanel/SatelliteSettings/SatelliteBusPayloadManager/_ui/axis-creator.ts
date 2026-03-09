@@ -7,7 +7,7 @@ import {
   type AxisPositionOptions,
 } from '../_util/axis-position-calculator.js';
 import { calculateBaseAxes, type VelocityDirectionOptions } from '../_util/base-axes-calculator.js';
-import { applyBusRollToAxes } from './entity-creator.js';
+import { applyBusRollPitchYawToAxes } from './entity-creator.js';
 
 /**
  * XYZ 축 엔티티 생성
@@ -149,11 +149,15 @@ export function createAxisEntities(
   };
 }
 
+/** BUS/안테나 방향 타입 */
+export type BusOrientation = { rollAngle: number; pitchAngle: number; yawAngle: number };
+
 /**
- * 안테나 XYZ 축 엔티티 생성 (BUS와 동일한 방향 사용, 안테나 위치에서 시작)
+ * 안테나 XYZ 축 엔티티 생성 (안테나 위치에서 시작, BUS+안테나 방향 반영)
  * @param velocityOptions 속도 방향(방위각/고도각 또는 ECEF). 없으면 기존 동작
- * @param busCartesian 버스 위치(ECEF). 주어지면 이 위치에서 축 방향을 계산해 BUS와 동일하게 함
- * @param getRollAngle roll 각도 getter. 있으면 축에 roll 반영
+ * @param busCartesian 버스 위치(ECEF). 주어지면 이 위치에서 축 방향을 계산
+ * @param getBusOrientation BUS 방향 getter
+ * @param getAntennaOrientation 안테나 방향 getter (BUS 축 기준)
  */
 export function createAntennaAxisEntities(
   viewer: any,
@@ -162,7 +166,8 @@ export function createAntennaAxisEntities(
   axisVisible: boolean,
   velocityOptions?: VelocityDirectionOptions,
   busCartesian?: any,
-  getRollAngle?: () => number
+  getBusOrientation?: () => BusOrientation | undefined,
+  getAntennaOrientation?: () => BusOrientation | undefined
 ): {
   xAxis: any;
   yAxis: any;
@@ -178,10 +183,12 @@ export function createAntennaAxisEntities(
     if (!center) return { center: null, axes: null };
     const baseAxes = calculateBaseAxes(busCartesian || center, velocityOptions);
     if (!baseAxes) return { center, axes: null };
-    const rollDeg = getRollAngle?.() ?? 0;
-    const axes = (typeof rollDeg === 'number' && rollDeg !== 0)
-      ? applyBusRollToAxes(baseAxes, rollDeg)
-      : baseAxes;
+    const busOri = getBusOrientation?.() ?? { rollAngle: 0, pitchAngle: 0, yawAngle: 0 };
+    let axes = applyBusRollPitchYawToAxes(baseAxes, busOri.rollAngle, busOri.pitchAngle, busOri.yawAngle);
+    const antOri = getAntennaOrientation?.();
+    if (antOri) {
+      axes = applyBusRollPitchYawToAxes(axes, antOri.rollAngle, antOri.pitchAngle, antOri.yawAngle);
+    }
     return { center, axes };
   };
 
