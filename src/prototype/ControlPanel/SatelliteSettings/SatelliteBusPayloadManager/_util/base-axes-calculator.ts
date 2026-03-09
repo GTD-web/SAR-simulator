@@ -29,10 +29,10 @@ export function calculateBaseAxes(
     new Cesium.Cartesian3()
   );
 
-  // POC 방식: ECEF 속도 벡터가 있으면 X축 = 궤도 진행방향으로 사용
+  // POC 방식: ECEF 속도 벡터가 있으면 X축 = 궤도 진행방향으로 사용 (반전)
   const vEcef = options?.velocityEcef;
   if (vEcef && typeof vEcef.x === 'number' && typeof vEcef.y === 'number' && typeof vEcef.z === 'number') {
-    const xAxisRaw = new Cesium.Cartesian3(vEcef.x, vEcef.y, vEcef.z);
+    const xAxisRaw = new Cesium.Cartesian3(-vEcef.x, -vEcef.y, -vEcef.z);
     const xAxisNormalized = Cesium.Cartesian3.normalize(xAxisRaw, new Cesium.Cartesian3());
     const yAxis = Cesium.Cartesian3.cross(
       xAxisNormalized,
