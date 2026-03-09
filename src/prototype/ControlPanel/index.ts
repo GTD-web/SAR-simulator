@@ -1,6 +1,7 @@
 import { SatelliteSettings } from './SatelliteSettings/index.js';
 import { OrbitSettings } from './OrbitSettings/index.js';
 import { TargetSettings, type TargetSettingsOptions } from './TargetSettings/index.js';
+import { restoreZoomDistance } from './SatelliteSettings/_util/camera-manager.js';
 
 export interface ControlPanelOptions {
   onRegionInfoFetched?: (data: import('./TargetSettings/index.js').RegionInfo) => void;
@@ -169,17 +170,18 @@ export class ControlPanelManager {
           this.orbitSettings?.flyToOrbitPosition();
         }
 
-        // 궤도 설정 탭 클릭 시 엔티티 위치로 카메라 이동 (엔티티 없으면 먼저 생성)
+        // 궤도 설정 탭 클릭 시 엔티티 위치로 카메라 이동 + 위성 추적 고정
         if (targetTab === 'orbit' && this.viewer) {
           if (this.satelliteSettings) {
             this.satelliteSettings.cancelCameraAnimation();
             this.satelliteSettings.ensureEntityExists();
           }
-          this.orbitSettings?.flyToOrbitPosition();
+          this.orbitSettings?.flyToOrbitPosition(true);
         }
 
         // 타겟 설정 탭 클릭 시 해당 타겟으로 카메라 이동 + 우측 지역 정보 패널 표시 (JSON은 '지역 정보 가져오기' 버튼으로만 생성)
         if (targetTab === 'target' && this.targetSettings) {
+          this.orbitSettings?.stopCameraTracking();
           if (this.satelliteSettings) {
             this.satelliteSettings.cancelCameraAnimation();
           }
@@ -245,8 +247,8 @@ export class ControlPanelManager {
         this.viewer.camera.cancelFlight();
       }
 
-      // trackedEntity 해제
       this.viewer.trackedEntity = undefined;
+      restoreZoomDistance(this.viewer);
 
       // 지구로 카메라 이동 (즉시)
       this.viewer.camera.flyHome(0);

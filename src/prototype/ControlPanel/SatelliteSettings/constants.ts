@@ -130,6 +130,8 @@ export const CAMERA = {
   MIN_RANGE_HORIZONTAL: 20,
   /** 카메라 거리 배수 (BUS 크기의 배수) - moveSatelliteToEarth에서 사용 */
   RANGE_MULTIPLIER_HORIZONTAL: 3,
+  /** 위성 추적 시 최대 줌 아웃 거리 (미터) - 멀리 가지 못하게 제한 */
+  MAX_ZOOM_DISTANCE_WHEN_TRACKING: 20_000_000,
 } as const;
 
 // 위치 검증 범위

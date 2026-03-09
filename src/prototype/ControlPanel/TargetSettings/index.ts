@@ -10,6 +10,7 @@ import {
 } from './_util/sar-grid-to-cesium.js';
 import { fetchBuildingsFromOverpass } from './_util/overpass-buildings.js';
 import { addTerrainElevationToBuildings } from './_util/sar-region-payload.js';
+import { restoreZoomDistance } from '../SatelliteSettings/_util/camera-manager.js';
 
 /** DEM 격자 한 점 (SAR 지오코딩용) */
 export interface ElevationGridPoint {
@@ -737,6 +738,7 @@ export class TargetSettings {
         this.viewer.camera.cancelFlight();
       }
       this.viewer.trackedEntity = undefined;
+      restoreZoomDistance(this.viewer);
 
       // 폴리곤 엔티티의 position(그리드 중심)으로만 비행 (카메라 고정 없음)
       if (this.target_footprint_entity) {

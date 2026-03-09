@@ -109,8 +109,9 @@ export class SatelliteBusPayloadManager {
       position.altitude
     );
 
-    this.position = new Cesium.ConstantPositionProperty(initialCartesian);
     this.currentCartesian = initialCartesian.clone();
+    // BUS·축이 동일한 currentCartesian 참조 → 항상 함께 움직임
+    this.position = new Cesium.CallbackProperty(() => this.currentCartesian, false);
 
     // 파라미터 저장
     this.busDimensions = busDimensions;
@@ -144,20 +145,23 @@ export class SatelliteBusPayloadManager {
       return;
     }
 
-    // 안테나 위치 계산 (BUS의 Y축 방향)
+    // 안테나 위치: currentCartesian 기반 CallbackProperty → BUS·축과 함께 움직임
     try {
-      // BUS의 Y축 방향으로 안테나 위치 설정 (BUS 크기의 절반 + 안테나 깊이의 절반 + 간격)
-      const antennaOffset = Cesium.Cartesian3.multiplyByScalar(
-        busAxes.yAxis,
-        busDimensions.width / 2 + antennaParams.depth / 2 + this.antennaGap,
-        new Cesium.Cartesian3()
-      );
-      const antennaPosition = Cesium.Cartesian3.add(
-        this.currentCartesian,
-        antennaOffset,
-        new Cesium.Cartesian3()
-      );
-      const antennaPositionProperty = new Cesium.ConstantPositionProperty(antennaPosition);
+      const antennaPositionProperty = new Cesium.CallbackProperty(() => {
+        if (!this.currentCartesian || !this.busDimensions || !this.antennaParams || !this.busOrientation) {
+          return new Cesium.Cartesian3(0, 0, 0);
+        }
+        const axes = calculateBaseAxes(this.currentCartesian, this.getVelocityOptions());
+        if (!axes) return new Cesium.Cartesian3(0, 0, 0);
+        const bo = this.busOrientation;
+        const bAxes = applyBusRollPitchYawToAxes(axes, bo.rollAngle, bo.pitchAngle, bo.yawAngle);
+        const offset = Cesium.Cartesian3.multiplyByScalar(
+          bAxes.yAxis,
+          this.busDimensions.width / 2 + this.antennaParams.depth / 2 + this.antennaGap,
+          new Cesium.Cartesian3()
+        );
+        return Cesium.Cartesian3.add(this.currentCartesian, offset, new Cesium.Cartesian3());
+      }, false);
 
       // 안테나 방향 계산 (busAxes 기준)
       const antennaOrientation = calculateAntennaOrientation(
@@ -339,7 +343,7 @@ export class SatelliteBusPayloadManager {
    * 위성 위치 업데이트
    */
   updatePosition(position: { longitude: number; latitude: number; altitude: number }): void {
-    if (!this.position || !this.currentCartesian) {
+    if (!this.currentCartesian) {
       console.warn('[SatelliteBusPayloadManager] 위치를 업데이트할 엔티티가 없습니다.');
       return;
     }
@@ -357,7 +361,6 @@ export class SatelliteBusPayloadManager {
       );
 
       this.currentCartesian = newCartesian.clone();
-      this.position.setValue(newCartesian);
 
       // BUS 방향 재계산 (X축 = 궤도 진행방향, Roll/Pitch/Yaw 적용)
       const baseAxes = calculateBaseAxes(this.currentCartesian, this.getVelocityOptions());
@@ -370,22 +373,8 @@ export class SatelliteBusPayloadManager {
           this.busEntity.orientation = new Cesium.ConstantProperty(busOrientationQuat);
         }
 
-        // 안테나 위치 재계산
+        // 안테나 방향 재계산 (위치는 CallbackProperty로 currentCartesian 기반 자동 갱신)
         if (this.antennaEntity && this.antennaParams) {
-          const antennaOffset = Cesium.Cartesian3.multiplyByScalar(
-            busAxes.yAxis,
-            this.busDimensions.width / 2 + this.antennaParams.depth / 2 + this.antennaGap,
-            new Cesium.Cartesian3()
-          );
-          const antennaPosition = Cesium.Cartesian3.add(
-            this.currentCartesian,
-            antennaOffset,
-            new Cesium.Cartesian3()
-          );
-          const antennaPositionProperty = new Cesium.ConstantPositionProperty(antennaPosition);
-          this.antennaEntity.position = antennaPositionProperty;
-
-          // 안테나 방향도 재계산
           const antennaOrientation = calculateAntennaOrientation(
             busAxes,
             this.antennaParams.rollAngle,
@@ -424,26 +413,7 @@ export class SatelliteBusPayloadManager {
         );
       }
 
-      // 안테나 위치도 재계산 (BUS 크기가 변경되면 안테나 위치도 변경됨)
-      if (this.antennaEntity && this.antennaParams && this.busOrientation && this.currentCartesian) {
-        const baseAxes = calculateBaseAxes(this.currentCartesian, this.getVelocityOptions());
-        if (baseAxes) {
-          const bo = this.busOrientation;
-          const busAxes = applyBusRollPitchYawToAxes(baseAxes, bo.rollAngle, bo.pitchAngle, bo.yawAngle);
-          const antennaOffset = Cesium.Cartesian3.multiplyByScalar(
-            busAxes.yAxis,
-            dimensions.width / 2 + this.antennaParams.depth / 2 + this.antennaGap,
-            new Cesium.Cartesian3()
-          );
-          const antennaPosition = Cesium.Cartesian3.add(
-            this.currentCartesian,
-            antennaOffset,
-            new Cesium.Cartesian3()
-          );
-          const antennaPositionProperty = new Cesium.ConstantPositionProperty(antennaPosition);
-          this.antennaEntity.position = antennaPositionProperty;
-        }
-      }
+      // 안테나 위치: CallbackProperty가 busDimensions 기반 자동 갱신
 
       console.log('[SatelliteBusPayloadManager] BUS 크기 업데이트 완료:', dimensions);
     } catch (error) {
@@ -472,26 +442,7 @@ export class SatelliteBusPayloadManager {
         );
       }
 
-      // 안테나 위치도 재계산 (안테나 depth가 변경되면 위치도 변경됨)
-      if (this.busDimensions && this.busOrientation && this.currentCartesian) {
-        const baseAxes = calculateBaseAxes(this.currentCartesian, this.getVelocityOptions());
-        if (baseAxes) {
-          const bo = this.busOrientation;
-          const busAxes = applyBusRollPitchYawToAxes(baseAxes, bo.rollAngle, bo.pitchAngle, bo.yawAngle);
-          const antennaOffset = Cesium.Cartesian3.multiplyByScalar(
-            busAxes.yAxis,
-            this.busDimensions.width / 2 + dimensions.depth / 2 + this.antennaGap,
-            new Cesium.Cartesian3()
-          );
-          const antennaPosition = Cesium.Cartesian3.add(
-            this.currentCartesian,
-            antennaOffset,
-            new Cesium.Cartesian3()
-          );
-          const antennaPositionProperty = new Cesium.ConstantPositionProperty(antennaPosition);
-          this.antennaEntity.position = antennaPositionProperty;
-        }
-      }
+      // 안테나 위치: CallbackProperty가 antennaParams 기반 자동 갱신
 
       console.log('[SatelliteBusPayloadManager] 안테나 크기 업데이트 완료:', dimensions);
     } catch (error) {
@@ -509,25 +460,7 @@ export class SatelliteBusPayloadManager {
 
     try {
       this.antennaGap = gap;
-
-      // 안테나 위치 재계산
-      const baseAxes = calculateBaseAxes(this.currentCartesian, this.getVelocityOptions());
-      if (baseAxes) {
-        const bo = this.busOrientation;
-        const busAxes = applyBusRollPitchYawToAxes(baseAxes, bo.rollAngle, bo.pitchAngle, bo.yawAngle);
-        const antennaOffset = Cesium.Cartesian3.multiplyByScalar(
-          busAxes.yAxis,
-          this.busDimensions.width / 2 + this.antennaParams.depth / 2 + this.antennaGap,
-          new Cesium.Cartesian3()
-        );
-        const antennaPosition = Cesium.Cartesian3.add(
-          this.currentCartesian,
-          antennaOffset,
-          new Cesium.Cartesian3()
-        );
-        const antennaPositionProperty = new Cesium.ConstantPositionProperty(antennaPosition);
-        this.antennaEntity.position = antennaPositionProperty;
-      }
+      // 안테나 위치: CallbackProperty가 antennaGap 기반 자동 갱신
 
       console.log('[SatelliteBusPayloadManager] 안테나 간격 업데이트 완료:', gap);
     } catch (error) {
@@ -554,18 +487,7 @@ export class SatelliteBusPayloadManager {
 
         this.busEntity.orientation = new Cesium.ConstantProperty(busOrientationQuat);
 
-        const antennaOffset = Cesium.Cartesian3.multiplyByScalar(
-          busAxes.yAxis,
-          this.busDimensions.width / 2 + this.antennaParams.depth / 2 + this.antennaGap,
-          new Cesium.Cartesian3()
-        );
-        const antennaPosition = Cesium.Cartesian3.add(
-          this.currentCartesian,
-          antennaOffset,
-          new Cesium.Cartesian3()
-        );
-        this.antennaEntity.position = new Cesium.ConstantPositionProperty(antennaPosition);
-
+        // 안테나 위치: CallbackProperty가 busOrientation 기반 자동 갱신
         const antennaOrientation = calculateAntennaOrientation(
           busAxes,
           this.antennaParams.rollAngle,
@@ -629,20 +551,7 @@ export class SatelliteBusPayloadManager {
       if (baseAxes) {
         const bo = this.busOrientation;
         const busAxes = applyBusRollPitchYawToAxes(baseAxes, bo.rollAngle, bo.pitchAngle, bo.yawAngle);
-        // 안테나 위치·방향
-        if (this.busDimensions) {
-          const antennaOffset = Cesium.Cartesian3.multiplyByScalar(
-            busAxes.yAxis,
-            this.busDimensions.width / 2 + this.antennaParams.depth / 2 + this.antennaGap,
-            new Cesium.Cartesian3()
-          );
-          const antennaPosition = Cesium.Cartesian3.add(
-            this.currentCartesian,
-            antennaOffset,
-            new Cesium.Cartesian3()
-          );
-          this.antennaEntity.position = new Cesium.ConstantPositionProperty(antennaPosition);
-        }
+        // 안테나 위치: CallbackProperty가 antennaParams 기반 자동 갱신
         const antennaOrientation = calculateAntennaOrientation(
           busAxes,
           orientation.rollAngle,

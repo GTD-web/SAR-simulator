@@ -76,9 +76,9 @@ export class SatelliteSettings {
 
   /**
    * 초기 엔티티 생성 - 궤도 6요소로 계산된 궤도 위 위치에 위성 배치
-   * (기존 DEFAULT_POSITION 우주 공간 배치 제거, 궤도 위 위성으로 바로 시작)
+   * @param flyAfterCreate true면 생성 후 궤도로 카메라 이동 (flyToSatelliteEntity 등에서 사용)
    */
-  private createInitialEntityOnOrbit(): void {
+  private createInitialEntityOnOrbit(flyAfterCreate = false): void {
     if (!this.busPayloadManager || !this.viewer) {
       console.error('[SatelliteSettings] 초기 엔티티 생성 실패: busPayloadManager 또는 viewer가 없습니다.');
       return;
@@ -128,8 +128,9 @@ export class SatelliteSettings {
         result.velocityEcef.z
       );
 
-      // 엔티티가 씬에 렌더된 후 카메라 이동 (postRender로 대기)
-      this.flyToOrbitAfterEntityRendered();
+      if (flyAfterCreate) {
+        this.flyToOrbitAfterEntityRendered();
+      }
     } catch (error) {
       console.error('[SatelliteSettings] 궤도 위 초기 엔티티 생성 오류:', error);
     }
@@ -454,7 +455,7 @@ export class SatelliteSettings {
     const busEntity = this.busPayloadManager.getBusEntity();
     if (!busEntity) {
       // 엔티티가 없으면 궤도 위 초기 엔티티 생성 후 카메라 이동
-      this.createInitialEntityOnOrbit();
+      this.createInitialEntityOnOrbit(true);
       return;
     }
 
