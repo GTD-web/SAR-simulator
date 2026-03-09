@@ -2,6 +2,7 @@ import {
   calculateOrbitPath,
   calculateOrbitalPeriod,
   getPositionAndVelocityAtEpoch,
+  computeTimeOverPosition,
   type OrbitalElements,
   type PositionAndVelocityAtEpoch,
 } from './_util/orbit-calculator.js';
@@ -54,21 +55,6 @@ export class OrbitSettings {
     const form = document.createElement('div');
     form.style.marginTop = '15px';
 
-    // 초기 시각 (해당 시각의 궤도 위치에 위성 설정의 모델이 배치됨, 진행방향=위성 X축)
-    const initialTimeLabel = document.createElement('label');
-    initialTimeLabel.style.marginTop = '10px';
-    initialTimeLabel.style.display = 'block';
-    initialTimeLabel.textContent = '초기 시각 (Initial Time):';
-    const initialTimeInput = document.createElement('input');
-    initialTimeInput.type = 'datetime-local';
-    initialTimeInput.id = 'prototypeOrbitInitialTime';
-    const now = new Date();
-    initialTimeInput.value =
-      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}T` +
-      `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    initialTimeLabel.appendChild(initialTimeInput);
-    form.appendChild(initialTimeLabel);
-
     // RADARSAT RCM 위성 기본값
     const RADARSAT_RCM: OrbitalElements = {
       semiMajorAxis: 6970.1,         // km (고도 592 km)
@@ -78,7 +64,27 @@ export class OrbitSettings {
       argumentOfPerigee: 0,
       meanAnomaly: 0
     };
-    
+
+    // 한반도(127°E, 37°N)에 가장 가까운 시각을 기본값으로 사용 (14일간 탐색)
+    const refTime = Cesium.JulianDate.fromDate(new Date());
+    const koreaPassTime = computeTimeOverPosition(RADARSAT_RCM, refTime);
+    const defaultInitialDate = Cesium.JulianDate.toDate(koreaPassTime);
+
+    // 초기 시각 (해당 시각의 궤도 위치에 위성 설정의 모델이 배치됨, 진행방향=위성 X축)
+    const initialTimeLabel = document.createElement('label');
+    initialTimeLabel.style.marginTop = '10px';
+    initialTimeLabel.style.display = 'block';
+    initialTimeLabel.textContent = '초기 시각 (Initial Time):';
+    const initialTimeInput = document.createElement('input');
+    initialTimeInput.type = 'datetime-local';
+    initialTimeInput.id = 'prototypeOrbitInitialTime';
+    const d = defaultInitialDate;
+    initialTimeInput.value =
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T` +
+      `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    initialTimeLabel.appendChild(initialTimeInput);
+    form.appendChild(initialTimeLabel);
+
     // 1. a (Semi-major Axis) - 긴반지름
     const semiMajorAxisInput = this.createInputField(
       form,
@@ -177,6 +183,17 @@ export class OrbitSettings {
     form.addEventListener('change', handleOrbitInputChange);
     form.addEventListener('input', handleOrbitInputChange);
 
+    // 진행 방향 표시 (Ascending / Descending)
+    const passDirectionLabel = document.createElement('div');
+    passDirectionLabel.id = 'prototypeOrbitPassDirection';
+    passDirectionLabel.style.marginTop = '12px';
+    passDirectionLabel.style.padding = '8px';
+    passDirectionLabel.style.background = 'rgba(0,0,0,0.2)';
+    passDirectionLabel.style.borderRadius = '4px';
+    passDirectionLabel.style.fontSize = '13px';
+    passDirectionLabel.textContent = '진행 방향: -';
+    form.appendChild(passDirectionLabel);
+
     // 수동 적용 버튼 (자동 업데이트가 동작하지 않을 때 사용)
     const applyButton = document.createElement('button');
     applyButton.type = 'button';
@@ -273,6 +290,7 @@ export class OrbitSettings {
     this.drawOrbitPath30Min();
 
     if (result) {
+      this.updatePassDirectionDisplay(result.passDirection);
       const position = Cesium.Cartesian3.fromDegrees(
         result.longitude,
         result.latitude,
@@ -486,8 +504,10 @@ export class OrbitSettings {
       );
       flyToPosition(this.viewer, position);
 
+      this.updatePassDirectionDisplay(result.passDirection);
+
       const periodHours = calculateOrbitalPeriod(semiMajorAxis);
-      console.log(`[OrbitSettings] 위성 배치 완료: (${result.longitude.toFixed(4)}°, ${result.latitude.toFixed(4)}°), 고도 ${(result.altitude / 1000).toFixed(2)} km, 진행방향=X축`);
+      console.log(`[OrbitSettings] 위성 배치 완료: (${result.longitude.toFixed(4)}°, ${result.latitude.toFixed(4)}°), 고도 ${(result.altitude / 1000).toFixed(2)} km, ${result.passDirection}, 진행방향=X축`);
       if (showAlert) {
         alert(`해당 시각의 궤도 위치에 위성을 배치했습니다.\n진행 방향이 위성 X축과 일치합니다.\n궤도 주기: ${periodHours.toFixed(2)}시간`);
       }
@@ -496,6 +516,18 @@ export class OrbitSettings {
       if (showAlert) {
         alert('위성 배치 실패: ' + error.message);
       }
+    }
+  }
+
+  /**
+   * 진행 방향(Ascending/Descending) 표시 업데이트
+   */
+  private updatePassDirectionDisplay(passDirection: 'ascending' | 'descending'): void {
+    const root = this.container || document;
+    const el = root.querySelector('#prototypeOrbitPassDirection') as HTMLElement;
+    if (el) {
+      const label = passDirection === 'ascending' ? 'Ascending (남→북)' : 'Descending (북→남)';
+      el.textContent = `진행 방향: ${label}`;
     }
   }
 

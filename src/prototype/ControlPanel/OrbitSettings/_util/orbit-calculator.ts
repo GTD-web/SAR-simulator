@@ -200,6 +200,8 @@ export interface PositionAndVelocityAtEpoch {
   velocityElevationDeg: number;
   /** 정규화된 ECEF 속도 벡터 (단위 벡터). POC 방식 X축 정렬용 */
   velocityEcef: { x: number; y: number; z: number };
+  /** 진행 방향: Ascending(남→북) / Descending(북→남) */
+  passDirection: 'ascending' | 'descending';
 }
 
 /** J2000 epoch (2000-01-01 12:00 UTC) - 지구 자전 각도 계산 기준 */
@@ -260,8 +262,26 @@ export function getPositionAndVelocityAtEpoch(
     const velocityAzimuthDeg = Cesium.Math.toDegrees(Math.atan2(vNorth, vEast));
     const velocityElevationDeg = Cesium.Math.toDegrees(Math.asin(vUp / speed));
 
-    const vel = new Cesium.Cartesian3(eciVel.x, eciVel.y, eciVel.z);
-    const velocityEcefNorm = Cesium.Cartesian3.normalize(vel, new Cesium.Cartesian3());
+    // ECI 속도를 ECEF로 변환 (회전 + 지구 자전 보정 omega × r)
+    const rotationRad = (earthRotationAngleDegrees * Math.PI) / 180;
+    const cosRot = Math.cos(rotationRad);
+    const sinRot = Math.sin(rotationRad);
+    const rEcefX = eciPos.x * cosRot + eciPos.y * sinRot;
+    const rEcefY = -eciPos.x * sinRot + eciPos.y * cosRot;
+    const omega = EARTH_ROTATION_RATE_RAD_PER_SEC;
+    const vRotX = eciVel.x * cosRot + eciVel.y * sinRot;
+    const vRotY = -eciVel.x * sinRot + eciVel.y * cosRot;
+    const vRotZ = eciVel.z;
+    const vEcefX = vRotX + omega * rEcefY;
+    const vEcefY = vRotY - omega * rEcefX;
+    const vEcefZ = vRotZ;
+    const vEcefMag = Math.sqrt(vEcefX * vEcefX + vEcefY * vEcefY + vEcefZ * vEcefZ);
+    const velocityEcefNorm = vEcefMag > 1e-10
+      ? { x: vEcefX / vEcefMag, y: vEcefY / vEcefMag, z: vEcefZ / vEcefMag }
+      : { x: vEcefX, y: vEcefY, z: vEcefZ };
+
+    // ECI 속도 Z > 0: 북극 방향(남→북) = Ascending, Z < 0: 남극 방향(북→남) = Descending
+    const passDirection = eciVel.z >= 0 ? 'ascending' : 'descending';
 
     return {
       longitude: geodetic.longitude,
@@ -270,6 +290,7 @@ export function getPositionAndVelocityAtEpoch(
       velocityAzimuthDeg,
       velocityElevationDeg,
       velocityEcef: { x: velocityEcefNorm.x, y: velocityEcefNorm.y, z: velocityEcefNorm.z },
+      passDirection,
     };
   } catch {
     return null;
@@ -435,4 +456,73 @@ export function calculateOrbitalPeriod(semiMajorAxisKm: number): number {
   const a = semiMajorAxisKm * 1000; // m로 변환
   const periodSeconds = 2 * Math.PI * Math.sqrt((a * a * a) / EARTH_GM);
   return periodSeconds / 3600; // 시간 단위로 반환
+}
+
+/** 한반도 중심 (서울 근처) - 위성 통과 시각 계산용 */
+const KOREA_LON = 127.0;
+const KOREA_LAT = 37.0;
+
+/**
+ * 궤도 6요소로 특정 시각의 지리 좌표 계산
+ */
+function getGeodeticAtTime(
+  elements: OrbitalElements,
+  epochTime: Cesium.JulianDate,
+  timeSinceEpochSeconds: number
+): { longitude: number; latitude: number; altitude: number } {
+  const eciPos = calculatePositionFromOrbitalElements(elements, timeSinceEpochSeconds);
+  const currentTime = Cesium.JulianDate.addSeconds(epochTime, timeSinceEpochSeconds, new Cesium.JulianDate());
+  const earthRotationAngleDegrees = getEarthRotationAngleAtTime(currentTime);
+  return eciToGeodetic(eciPos.x, eciPos.y, eciPos.z, currentTime, earthRotationAngleDegrees);
+}
+
+/**
+ * 궤도 6요소로 목표 지점(경위도)에 가장 가까운 시각 계산
+ * 넓은 시간대를 탐색하여 한반도에 가장 가까운 통과 시각 반환
+ * @param elements 궤도 6요소
+ * @param refTime 검색 시작 시각
+ * @param targetLon 목표 경도 (deg)
+ * @param targetLat 목표 위도 (deg)
+ * @returns 목표에 가장 가까운 시각 (JulianDate)
+ */
+export function computeTimeOverPosition(
+  elements: OrbitalElements,
+  refTime: Cesium.JulianDate,
+  targetLon: number = KOREA_LON,
+  targetLat: number = KOREA_LAT
+): Cesium.JulianDate {
+  const periodHours = calculateOrbitalPeriod(elements.semiMajorAxis);
+  const periodSeconds = periodHours * 3600;
+  const searchDays = 14; // 14일간 탐색
+  const searchSeconds = searchDays * 86400;
+  const stepSeconds = 60; // 1분 간격으로 1차 탐색
+  let bestT = 0;
+  let bestDistSq = Infinity;
+
+  for (let t = 0; t <= searchSeconds; t += stepSeconds) {
+    const geodetic = getGeodeticAtTime(elements, refTime, t);
+    const dLon = geodetic.longitude - targetLon;
+    const dLat = geodetic.latitude - targetLat;
+    const distSq = dLon * dLon + dLat * dLat;
+    if (distSq < bestDistSq) {
+      bestDistSq = distSq;
+      bestT = t;
+    }
+  }
+
+  // 2차: 최적점 주변 1궤도 구간을 5초 간격으로 정밀 탐색
+  const refineRadius = Math.min(periodSeconds, 6000);
+  const refineStep = 5;
+  for (let t = Math.max(0, bestT - refineRadius); t <= bestT + refineRadius; t += refineStep) {
+    const geodetic = getGeodeticAtTime(elements, refTime, t);
+    const dLon = geodetic.longitude - targetLon;
+    const dLat = geodetic.latitude - targetLat;
+    const distSq = dLon * dLon + dLat * dLat;
+    if (distSq < bestDistSq) {
+      bestDistSq = distSq;
+      bestT = t;
+    }
+  }
+
+  return Cesium.JulianDate.addSeconds(refTime, bestT, new Cesium.JulianDate());
 }
