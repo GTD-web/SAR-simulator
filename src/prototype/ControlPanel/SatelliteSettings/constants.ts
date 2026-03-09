@@ -83,7 +83,7 @@ export const DEFAULT_ANTENNA_GAP_M = DEFAULT_ANTENNA_GAP_MM / 1000;
 // 기본 안테나 방향 (도)
 export const DEFAULT_ANTENNA_ORIENTATION = {
   /** Roll 각도 (도) */
-  ROLL: 0,
+  ROLL: 45,
   /** Pitch 각도 (도) */
   PITCH: 0,
   /** Yaw 각도 (도) */

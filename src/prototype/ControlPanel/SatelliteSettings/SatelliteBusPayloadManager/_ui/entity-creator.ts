@@ -60,12 +60,39 @@ export function createAntennaEntity(
 }
 
 /**
+ * X축 기준 roll 회전 적용한 축 반환
+ */
+export function applyBusRollToAxes(
+  axes: { xAxis: any; yAxis: any; zAxis: any },
+  busRollDeg: number
+): { xAxis: any; yAxis: any; zAxis: any } {
+  if (typeof busRollDeg !== 'number' || Number.isNaN(busRollDeg) || busRollDeg === 0) {
+    return axes;
+  }
+  const rollRad = Cesium.Math.toRadians(busRollDeg);
+  const rollQuat = Cesium.Quaternion.fromAxisAngle(axes.xAxis, rollRad, new Cesium.Quaternion());
+  const rollMatrix = Cesium.Matrix3.fromQuaternion(rollQuat, new Cesium.Matrix3());
+  const yAxis = Cesium.Cartesian3.normalize(
+    Cesium.Matrix3.multiplyByVector(rollMatrix, axes.yAxis, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3()
+  );
+  const zAxis = Cesium.Cartesian3.normalize(
+    Cesium.Matrix3.multiplyByVector(rollMatrix, axes.zAxis, new Cesium.Cartesian3()),
+    new Cesium.Cartesian3()
+  );
+  return { xAxis: axes.xAxis, yAxis, zAxis };
+}
+
+/**
  * BUS 방향 쿼터니언 계산
+ * @param cartesian 위성 ECEF 좌표
  * @param velocityOptions 속도 방향(방위각/고도각)이 주어지면 해당 축 기준으로 방향 계산
+ * @param busRollDeg BUS Roll 각도 (도). X축(궤도 진행방향) 기준 회전. 안테나 roll과 동일하게 적용
  */
 export function calculateBusOrientation(
   cartesian: any,
-  velocityOptions?: VelocityDirectionOptions
+  velocityOptions?: VelocityDirectionOptions,
+  busRollDeg?: number
 ): any {
   const axes = velocityOptions
     ? calculateBaseAxes(cartesian, velocityOptions)
@@ -76,11 +103,16 @@ export function calculateBusOrientation(
       new Cesium.HeadingPitchRoll(0, 0, 0)
     );
   }
+
+  const rolledAxes = (typeof busRollDeg === 'number' && !Number.isNaN(busRollDeg) && busRollDeg !== 0)
+    ? applyBusRollToAxes(axes, busRollDeg)
+    : axes;
+
   // 회전 행렬: 열이 xAxis, yAxis, zAxis (Matrix3 생성자는 row-major)
   const m = new Cesium.Matrix3(
-    axes.xAxis.x, axes.yAxis.x, axes.zAxis.x,
-    axes.xAxis.y, axes.yAxis.y, axes.zAxis.y,
-    axes.xAxis.z, axes.yAxis.z, axes.zAxis.z
+    rolledAxes.xAxis.x, rolledAxes.yAxis.x, rolledAxes.zAxis.x,
+    rolledAxes.xAxis.y, rolledAxes.yAxis.y, rolledAxes.zAxis.y,
+    rolledAxes.xAxis.z, rolledAxes.yAxis.z, rolledAxes.zAxis.z
   );
   return Cesium.Quaternion.fromRotationMatrix(m);
 }

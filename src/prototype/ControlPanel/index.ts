@@ -83,11 +83,11 @@ export class ControlPanelManager {
     orbitTabButton.textContent = '궤도 설정';
     tabButtons.appendChild(orbitTabButton);
 
-    // 타겟 설정 탭 버튼
+    // AOI 탭 버튼
     const targetTabButton = document.createElement('button');
     targetTabButton.className = 'tab-button';
     targetTabButton.setAttribute('data-tab', 'target');
-    targetTabButton.textContent = '타겟 설정';
+    targetTabButton.textContent = 'AOI';
     tabButtons.appendChild(targetTabButton);
 
     tabContainer.appendChild(tabButtons);

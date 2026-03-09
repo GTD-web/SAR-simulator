@@ -2,6 +2,12 @@ import {
   calculateBaseAxes,
   type VelocityDirectionOptions,
 } from './base-axes-calculator.js';
+import { applyBusRollToAxes } from '../_ui/entity-creator.js';
+
+export interface AxisPositionOptions extends VelocityDirectionOptions {
+  /** BUS Roll 각도 (도). 있으면 축 방향에 roll 반영 */
+  busRollDeg?: number;
+}
 
 /**
  * 축 위치 계산 유틸리티
@@ -12,23 +18,26 @@ import {
  * @param cartesian 위성의 ECEF 좌표 (Cartesian3)
  * @param axis 축 종류 ('x' | 'y' | 'z')
  * @param axisLength 축 길이
- * @param options 속도 방향(방위각/고도각 deg). 없으면 기존 동작
+ * @param options 속도 방향(방위각/고도각 deg). busRollDeg 있으면 roll 반영
  * @returns 축 방향선의 시작점과 끝점 배열
  */
 export function getAxisLinePositions(
   cartesian: any,
   axis: 'x' | 'y' | 'z',
   axisLength: number,
-  options?: VelocityDirectionOptions
+  options?: AxisPositionOptions
 ): any[] {
   if (!cartesian) {
     return [];
   }
 
-  const axes = calculateBaseAxes(cartesian, options);
-  if (!axes) {
+  const baseAxes = calculateBaseAxes(cartesian, options);
+  if (!baseAxes) {
     return [];
   }
+  const axes = (typeof options?.busRollDeg === 'number' && options.busRollDeg !== 0)
+    ? applyBusRollToAxes(baseAxes, options.busRollDeg)
+    : baseAxes;
 
   const start = cartesian;
   let direction: any;
@@ -66,23 +75,26 @@ export function getAxisLinePositions(
  * @param cartesian 위성의 ECEF 좌표 (Cartesian3)
  * @param axis 축 종류 ('x' | 'y' | 'z')
  * @param axisLength 축 길이
- * @param options 속도 방향(방위각/고도각 deg). 없으면 기존 동작
+ * @param options 속도 방향(방위각/고도각 deg). busRollDeg 있으면 roll 반영
  * @returns 축 끝점 위치 (Cartesian3)
  */
 export function getAxisEndPosition(
   cartesian: any,
   axis: 'x' | 'y' | 'z',
   axisLength: number,
-  options?: VelocityDirectionOptions
+  options?: AxisPositionOptions
 ): any | undefined {
   if (!cartesian) {
     return undefined;
   }
 
-  const axes = calculateBaseAxes(cartesian, options);
-  if (!axes) {
+  const baseAxes = calculateBaseAxes(cartesian, options);
+  if (!baseAxes) {
     return undefined;
   }
+  const axes = (typeof options?.busRollDeg === 'number' && options.busRollDeg !== 0)
+    ? applyBusRollToAxes(baseAxes, options.busRollDeg)
+    : baseAxes;
 
   const start = cartesian;
   let direction: any;

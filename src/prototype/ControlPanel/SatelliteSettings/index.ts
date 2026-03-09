@@ -1,4 +1,5 @@
 import { SatelliteBusPayloadManager } from './SatelliteBusPayloadManager/index.js';
+import { PrototypeSwathPreview } from './_util/prototype-swath-preview.js';
 import { renderSatelliteSettingsForm, FormRendererCallbacks } from './_ui/form-renderer.js';
 import { updateEntity } from './_util/entity-updater.js';
 import { createSatelliteEntity } from './_util/entity-creator.js';
@@ -24,6 +25,7 @@ export class SatelliteSettings {
   private container: HTMLElement | null;
   private viewer: any;
   private busPayloadManager: SatelliteBusPayloadManager | null;
+  private swathPreview: PrototypeSwathPreview | null;
   private updateDebounceTimer: number | null;
   private currentDirectionInputId: string | null;
   private cameraAnimationTimer: number | null;
@@ -32,6 +34,7 @@ export class SatelliteSettings {
     this.container = null;
     this.viewer = null;
     this.busPayloadManager = null;
+    this.swathPreview = null;
     this.updateDebounceTimer = null;
     this.currentDirectionInputId = null;
     this.cameraAnimationTimer = null;
@@ -45,6 +48,8 @@ export class SatelliteSettings {
     this.viewer = viewer || null;
     if (this.viewer) {
       this.busPayloadManager = new SatelliteBusPayloadManager(this.viewer);
+      this.swathPreview = new PrototypeSwathPreview(this.viewer, this.busPayloadManager);
+      this.swathPreview.init();
     }
     this.render();
     
@@ -474,6 +479,10 @@ export class SatelliteSettings {
     // 방향 화살표 제거
     this.hideDirectionArrows();
 
+    if (this.swathPreview) {
+      this.swathPreview.clear();
+      this.swathPreview = null;
+    }
     if (this.busPayloadManager) {
       this.busPayloadManager.removeSatellite();
       this.busPayloadManager = null;

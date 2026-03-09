@@ -4,19 +4,23 @@ import {
   getAxisLinePositionsWithAxes,
   getAxisEndPositionWithAxes,
   type AxesLike,
+  type AxisPositionOptions,
 } from '../_util/axis-position-calculator.js';
 import { calculateBaseAxes, type VelocityDirectionOptions } from '../_util/base-axes-calculator.js';
+import { applyBusRollToAxes } from './entity-creator.js';
 
 /**
  * XYZ 축 엔티티 생성
  * @param velocityOptions 속도 방향(방위각/고도각 deg). 없으면 기존 동작
+ * @param getAxisOptions roll 포함 옵션 getter. CallbackProperty에서 호출되어 roll 변경 시 축 갱신
  */
 export function createAxisEntities(
   viewer: any,
   currentCartesian: any,
   axisLength: number,
   axisVisible: boolean,
-  velocityOptions?: VelocityDirectionOptions
+  velocityOptions?: VelocityDirectionOptions,
+  getAxisOptions?: () => AxisPositionOptions | undefined
 ): {
   xAxis: any;
   yAxis: any;
@@ -25,12 +29,14 @@ export function createAxisEntities(
   yLabel: any;
   zLabel: any;
 } {
+  const resolveOptions = () => getAxisOptions?.() ?? velocityOptions;
+
   // X축 (위성 진행 방향) - 빨간색
   const xAxisEntity = viewer.entities.add({
     name: 'X-Axis (Satellite Velocity)',
     polyline: {
       positions: new Cesium.CallbackProperty(() => {
-        return getAxisLinePositions(currentCartesian, 'x', axisLength, velocityOptions);
+        return getAxisLinePositions(currentCartesian, 'x', axisLength, resolveOptions());
       }, false),
       width: 3,
       material: Cesium.Color.RED,
@@ -44,7 +50,7 @@ export function createAxisEntities(
     name: 'Y-Axis (SAR Look Direction)',
     polyline: {
       positions: new Cesium.CallbackProperty(() => {
-        return getAxisLinePositions(currentCartesian, 'y', axisLength, velocityOptions);
+        return getAxisLinePositions(currentCartesian, 'y', axisLength, resolveOptions());
       }, false),
       width: 3,
       material: Cesium.Color.GREEN,
@@ -58,7 +64,7 @@ export function createAxisEntities(
     name: 'Z-Axis (Earth Center Direction)',
     polyline: {
       positions: new Cesium.CallbackProperty(() => {
-        return getAxisLinePositions(currentCartesian, 'z', axisLength, velocityOptions);
+        return getAxisLinePositions(currentCartesian, 'z', axisLength, resolveOptions());
       }, false),
       width: 3,
       material: Cesium.Color.BLUE,
@@ -71,7 +77,7 @@ export function createAxisEntities(
   const xLabelEntity = viewer.entities.add({
     name: 'X-Axis Label',
     position: new Cesium.CallbackProperty(() => {
-      return getAxisEndPosition(currentCartesian, 'x', axisLength, velocityOptions);
+      return getAxisEndPosition(currentCartesian, 'x', axisLength, resolveOptions());
     }, false),
     label: {
       text: 'X',
@@ -93,7 +99,7 @@ export function createAxisEntities(
   const yLabelEntity = viewer.entities.add({
     name: 'Y-Axis Label',
     position: new Cesium.CallbackProperty(() => {
-      return getAxisEndPosition(currentCartesian, 'y', axisLength, velocityOptions);
+      return getAxisEndPosition(currentCartesian, 'y', axisLength, resolveOptions());
     }, false),
     label: {
       text: 'Y',
@@ -115,7 +121,7 @@ export function createAxisEntities(
   const zLabelEntity = viewer.entities.add({
     name: 'Z-Axis Label',
     position: new Cesium.CallbackProperty(() => {
-      return getAxisEndPosition(currentCartesian, 'z', axisLength, velocityOptions);
+      return getAxisEndPosition(currentCartesian, 'z', axisLength, resolveOptions());
     }, false),
     label: {
       text: 'Z',
@@ -147,6 +153,7 @@ export function createAxisEntities(
  * 안테나 XYZ 축 엔티티 생성 (BUS와 동일한 방향 사용, 안테나 위치에서 시작)
  * @param velocityOptions 속도 방향(방위각/고도각 또는 ECEF). 없으면 기존 동작
  * @param busCartesian 버스 위치(ECEF). 주어지면 이 위치에서 축 방향을 계산해 BUS와 동일하게 함
+ * @param getRollAngle roll 각도 getter. 있으면 축에 roll 반영
  */
 export function createAntennaAxisEntities(
   viewer: any,
@@ -154,7 +161,8 @@ export function createAntennaAxisEntities(
   axisLength: number,
   axisVisible: boolean,
   velocityOptions?: VelocityDirectionOptions,
-  busCartesian?: any
+  busCartesian?: any,
+  getRollAngle?: () => number
 ): {
   xAxis: any;
   yAxis: any;
@@ -168,8 +176,12 @@ export function createAntennaAxisEntities(
     const time = viewer.clock.currentTime;
     const center = antennaEntity.position?.getValue(time);
     if (!center) return { center: null, axes: null };
-    // BUS와 동일한 방향: 축은 버스 위치에서 계산하고, 선만 안테나 중심에서 그림
-    const axes = calculateBaseAxes(busCartesian || center, velocityOptions);
+    const baseAxes = calculateBaseAxes(busCartesian || center, velocityOptions);
+    if (!baseAxes) return { center, axes: null };
+    const rollDeg = getRollAngle?.() ?? 0;
+    const axes = (typeof rollDeg === 'number' && rollDeg !== 0)
+      ? applyBusRollToAxes(baseAxes, rollDeg)
+      : baseAxes;
     return { center, axes };
   };
 

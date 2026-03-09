@@ -256,7 +256,7 @@ export function renderSatelliteSettingsForm(
     'prototypeAntennaRoll',
     'number',
     'x축 회전',
-    '0',
+    '45',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
     callbacks.onInputChange
