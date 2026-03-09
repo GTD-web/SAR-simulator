@@ -202,6 +202,21 @@ export interface PositionAndVelocityAtEpoch {
   velocityEcef: { x: number; y: number; z: number };
 }
 
+/** J2000 epoch (2000-01-01 12:00 UTC) - 지구 자전 각도 계산 기준 */
+const J2000 = Cesium.JulianDate.fromDate(new Date(Date.UTC(2000, 0, 1, 12, 0, 0)));
+
+/**
+ * epoch 시각에 해당하는 지구 자전 각도(도) 계산 (ECI→ECEF 변환용)
+ */
+function getEarthRotationAngleAtTime(time: Cesium.JulianDate): number {
+  const timeMs = Cesium.JulianDate.toDate(time).getTime();
+  const j2000Ms = Cesium.JulianDate.toDate(J2000).getTime();
+  const daysSinceJ2000 = (timeMs - j2000Ms) / 86400000;
+  const degreesPerDay = 360.98564736629; // 지구 자전 (도/일)
+  const angle = degreesPerDay * daysSinceJ2000;
+  return ((angle % 360) + 360) % 360;
+}
+
 /**
  * 궤도 epoch 시각(timeSinceEpoch=0)에서의 위치(경위도·고도)와 속도 방향(방위각·고도각) 반환.
  * 위성 로컬 X축을 진행 방향으로 맞출 때 사용.
@@ -214,7 +229,7 @@ export function getPositionAndVelocityAtEpoch(
     const timeSinceEpoch = 0;
     const eciPos = calculatePositionFromOrbitalElements(elements, timeSinceEpoch);
     const eciVel = calculateVelocityFromOrbitalElements(elements, timeSinceEpoch);
-    const earthRotationAngleDegrees = 0;
+    const earthRotationAngleDegrees = getEarthRotationAngleAtTime(epochTime);
     const geodetic = eciToGeodetic(eciPos.x, eciPos.y, eciPos.z, epochTime, earthRotationAngleDegrees);
 
     const lonRad = Cesium.Math.toRadians(geodetic.longitude);
@@ -362,25 +377,20 @@ export function calculateOrbitPath(
   // epoch 시간 (현재 시간)
   const epochTime = startTime;
   
-  // 지구 자전 속도 (도/분) - Python 코드와 동일
-  const earthRotationRateDegPerMin = 360.0 / (24 * 60); // 약 0.25도/분
-  
   // 디버깅: 첫 번째와 마지막 점의 지구 자전 각도 로그 출력
   let firstEarthRotationAngle: number | null = null;
   let lastEarthRotationAngle: number | null = null;
   
   for (let i = 0; i <= totalSamples; i++) {
     const timeSinceEpoch = i * sampleIntervalSeconds;
-    const timeMinutes = timeSinceEpoch / 60;
     const currentTime = Cesium.JulianDate.addSeconds(epochTime, timeSinceEpoch, new Cesium.JulianDate());
     
     try {
       // ECI 좌표 계산 (calculatePositionFromOrbitalElements가 시간에 따라 진근점이각을 자동 업데이트)
       const eciPos = calculatePositionFromOrbitalElements(elements, timeSinceEpoch);
       
-      // Python 코드 방식: 지구 자전 각도 계산 (도/분)
-      // 지구 자전 속도: 360도 / (24시간 * 60분) = 0.25도/분
-      const earthRotationAngleDegrees = earthRotationRateDegPerMin * timeMinutes;
+      // 위성 위치와 동일한 방식: epoch 시각 기준 절대 지구 자전 각도 사용
+      const earthRotationAngleDegrees = getEarthRotationAngleAtTime(currentTime);
       
       // 첫 번째와 마지막 점의 지구 자전 각도 저장
       if (i === 0) {
@@ -412,7 +422,6 @@ export function calculateOrbitPath(
     console.log(`  시작 시점: ${firstEarthRotationAngle.toFixed(4)}도 (시간: 0분)`);
     console.log(`  종료 시점: ${lastEarthRotationAngle.toFixed(4)}도 (시간: ${(durationHours * 60).toFixed(1)}분)`);
     console.log(`  총 자전 각도: ${(lastEarthRotationAngle - firstEarthRotationAngle).toFixed(4)}도`);
-    console.log(`  지구 자전 속도: ${earthRotationRateDegPerMin.toFixed(6)}도/분 (${(earthRotationRateDegPerMin * 60).toFixed(4)}도/시간)`);
   }
   
   return positions;

@@ -170,27 +170,24 @@ export class OrbitSettings {
       '0.1'
     );
 
-    // 입력 필드에 change 이벤트 추가 (자동 업데이트)
-    const inputFields = [
-      initialTimeInput,
-      semiMajorAxisInput.querySelector('input'),
-      eccentricityInput.querySelector('input'),
-      inclinationInput.querySelector('input'),
-      raanInput.querySelector('input'),
-      argumentOfPerigeeInput.querySelector('input'),
-      anomalyInput.querySelector('input'),
-      anomalyTypeSelect
-    ].filter(Boolean) as (HTMLInputElement | HTMLSelectElement)[];
+    // 폼 전체에 이벤트 위임 (change, input) - 궤도값 변경 시 자동 업데이트
+    const handleOrbitInputChange = () => {
+      this.updateOrbitDebounced();
+    };
+    form.addEventListener('change', handleOrbitInputChange);
+    form.addEventListener('input', handleOrbitInputChange);
 
-    inputFields.forEach(input => {
-      input.addEventListener('change', () => {
-        this.updateOrbitDebounced();
-      });
-      input.addEventListener('input', () => {
-        this.updateOrbitDebounced();
-      });
+    // 수동 적용 버튼 (자동 업데이트가 동작하지 않을 때 사용)
+    const applyButton = document.createElement('button');
+    applyButton.type = 'button';
+    applyButton.className = 'sidebar-section button';
+    applyButton.style.width = '100%';
+    applyButton.style.marginTop = '15px';
+    applyButton.textContent = '궤도 적용';
+    applyButton.addEventListener('click', () => {
+      this.applyOrbitToSatellite(false);
     });
-
+    form.appendChild(applyButton);
 
     section.appendChild(form);
     this.container.appendChild(section);
@@ -310,27 +307,28 @@ export class OrbitSettings {
    * 폼에서 궤도 6요소와 초기 시각(epoch)을 읽어 반환. 유효하지 않으면 null.
    */
   private getElementsAndEpochTimeFromForm(): { elements: OrbitalElements; epochTime: Cesium.JulianDate } | null {
+    const root = this.container || document;
     const semiMajorAxis = parseFloat(
-      (document.getElementById('prototypeOrbitSemiMajorAxis') as HTMLInputElement)?.value || '6878.137'
+      (root.querySelector('#prototypeOrbitSemiMajorAxis') as HTMLInputElement)?.value || '6878.137'
     );
     const eccentricity = parseFloat(
-      (document.getElementById('prototypeOrbitEccentricity') as HTMLInputElement)?.value || '0.0'
+      (root.querySelector('#prototypeOrbitEccentricity') as HTMLInputElement)?.value || '0.0'
     );
     if (semiMajorAxis < 6378.137 || eccentricity < 0 || eccentricity >= 1) {
       return null;
     }
     const inclination = parseFloat(
-      (document.getElementById('prototypeOrbitInclination') as HTMLInputElement)?.value || '98.0'
+      (root.querySelector('#prototypeOrbitInclination') as HTMLInputElement)?.value || '98.0'
     );
     const raan = parseFloat(
-      (document.getElementById('prototypeOrbitRAAN') as HTMLInputElement)?.value || '0.0'
+      (root.querySelector('#prototypeOrbitRAAN') as HTMLInputElement)?.value || '0.0'
     );
     const argumentOfPerigee = parseFloat(
-      (document.getElementById('prototypeOrbitArgumentOfPerigee') as HTMLInputElement)?.value || '0.0'
+      (root.querySelector('#prototypeOrbitArgumentOfPerigee') as HTMLInputElement)?.value || '0.0'
     );
-    const anomalyType = (document.getElementById('prototypeOrbitAnomalyType') as HTMLSelectElement)?.value || 'true';
+    const anomalyType = (root.querySelector('#prototypeOrbitAnomalyType') as HTMLSelectElement)?.value || 'true';
     const anomaly = parseFloat(
-      (document.getElementById('prototypeOrbitAnomaly') as HTMLInputElement)?.value || '0.0'
+      (root.querySelector('#prototypeOrbitAnomaly') as HTMLInputElement)?.value || '0.0'
     );
     const elements: OrbitalElements = {
       semiMajorAxis,
@@ -344,7 +342,7 @@ export class OrbitSettings {
     } else {
       elements.meanAnomaly = anomaly;
     }
-    const initialTimeStr = (document.getElementById('prototypeOrbitInitialTime') as HTMLInputElement)?.value?.trim();
+    const initialTimeStr = (root.querySelector('#prototypeOrbitInitialTime') as HTMLInputElement)?.value?.trim();
     const initialTimeValid = initialTimeStr !== undefined && initialTimeStr !== '' && !Number.isNaN(new Date(initialTimeStr).getTime());
     const epochTime = initialTimeValid
       ? Cesium.JulianDate.fromDate(new Date(initialTimeStr!))
@@ -364,7 +362,8 @@ export class OrbitSettings {
 
     const { elements, epochTime } = parsed;
     const durationHours = 0.5; // 30분
-    const positions = calculateOrbitPath(elements, epochTime, durationHours, 1);
+    const sampleIntervalMinutes = 1 / 6; // 10초 간격 (181점) — 줌인해도 보이는 구간에 점이 많아 곡선으로 보임
+    const positions = calculateOrbitPath(elements, epochTime, durationHours, sampleIntervalMinutes);
     if (positions.length === 0) return;
 
     this.orbitPathEntity = this.viewer.entities.add({
@@ -408,24 +407,25 @@ export class OrbitSettings {
     }
 
     try {
+      const root = this.container || document;
       const semiMajorAxis = parseFloat(
-        (document.getElementById('prototypeOrbitSemiMajorAxis') as HTMLInputElement)?.value || '6878.137'
+        (root.querySelector('#prototypeOrbitSemiMajorAxis') as HTMLInputElement)?.value || '6878.137'
       );
       const eccentricity = parseFloat(
-        (document.getElementById('prototypeOrbitEccentricity') as HTMLInputElement)?.value || '0.0'
+        (root.querySelector('#prototypeOrbitEccentricity') as HTMLInputElement)?.value || '0.0'
       );
       const inclination = parseFloat(
-        (document.getElementById('prototypeOrbitInclination') as HTMLInputElement)?.value || '98.0'
+        (root.querySelector('#prototypeOrbitInclination') as HTMLInputElement)?.value || '98.0'
       );
       const raan = parseFloat(
-        (document.getElementById('prototypeOrbitRAAN') as HTMLInputElement)?.value || '0.0'
+        (root.querySelector('#prototypeOrbitRAAN') as HTMLInputElement)?.value || '0.0'
       );
       const argumentOfPerigee = parseFloat(
-        (document.getElementById('prototypeOrbitArgumentOfPerigee') as HTMLInputElement)?.value || '0.0'
+        (root.querySelector('#prototypeOrbitArgumentOfPerigee') as HTMLInputElement)?.value || '0.0'
       );
-      const anomalyType = (document.getElementById('prototypeOrbitAnomalyType') as HTMLSelectElement)?.value || 'true';
+      const anomalyType = (root.querySelector('#prototypeOrbitAnomalyType') as HTMLSelectElement)?.value || 'true';
       const anomaly = parseFloat(
-        (document.getElementById('prototypeOrbitAnomaly') as HTMLInputElement)?.value || '0.0'
+        (root.querySelector('#prototypeOrbitAnomaly') as HTMLInputElement)?.value || '0.0'
       );
 
       if (semiMajorAxis < 6378.137) {
@@ -454,7 +454,7 @@ export class OrbitSettings {
         elements.meanAnomaly = anomaly;
       }
 
-      const initialTimeStr = (document.getElementById('prototypeOrbitInitialTime') as HTMLInputElement)?.value?.trim();
+      const initialTimeStr = (root.querySelector('#prototypeOrbitInitialTime') as HTMLInputElement)?.value?.trim();
       const initialTimeValid = initialTimeStr !== undefined && initialTimeStr !== '' && !Number.isNaN(new Date(initialTimeStr).getTime());
       const epochTime = initialTimeValid
         ? Cesium.JulianDate.fromDate(new Date(initialTimeStr!))
@@ -477,6 +477,14 @@ export class OrbitSettings {
 
       // 진행 30분 궤도 경로 그리기 (XYZ 축 참고용)
       this.drawOrbitPath30Min();
+
+      // 궤도 변경 시 카메라도 새 위치로 이동
+      const position = Cesium.Cartesian3.fromDegrees(
+        result.longitude,
+        result.latitude,
+        result.altitude
+      );
+      flyToPosition(this.viewer, position);
 
       const periodHours = calculateOrbitalPeriod(semiMajorAxis);
       console.log(`[OrbitSettings] 위성 배치 완료: (${result.longitude.toFixed(4)}°, ${result.latitude.toFixed(4)}°), 고도 ${(result.altitude / 1000).toFixed(2)} km, 진행방향=X축`);

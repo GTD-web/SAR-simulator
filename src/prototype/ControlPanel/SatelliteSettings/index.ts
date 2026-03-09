@@ -365,6 +365,48 @@ export class SatelliteSettings {
 
 
   /**
+   * 엔티티가 없으면 생성 (궤도 설정 탭 등에서 카메라 이동 전 호출)
+   */
+  ensureEntityExists(): void {
+    if (!this.busPayloadManager || !this.viewer) return;
+    if (this.busPayloadManager.getBusEntity()) return;
+
+    try {
+      const lonInput = (document.getElementById('prototypeSatelliteLongitude') as HTMLInputElement)?.value || String(DEFAULT_POSITION.LONGITUDE);
+      const latInput = (document.getElementById('prototypeSatelliteLatitude') as HTMLInputElement)?.value || String(DEFAULT_POSITION.LATITUDE);
+      const altInput = (document.getElementById('prototypeSatelliteAltitude') as HTMLInputElement)?.value || String(DEFAULT_POSITION.ALTITUDE_KM);
+
+      const longitude = parseFloat(lonInput) || DEFAULT_POSITION.LONGITUDE;
+      const latitude = parseFloat(latInput) || DEFAULT_POSITION.LATITUDE;
+      const altitudeKm = parseFloat(altInput) || DEFAULT_POSITION.ALTITUDE_KM;
+      const altitude = altitudeKm * 1000;
+
+      this.busPayloadManager.createSatellite(
+        DEFAULT_SATELLITE_INFO.NAME,
+        { longitude, latitude, altitude },
+        {
+          length: DEFAULT_BUS_DIMENSIONS_M.LENGTH,
+          width: DEFAULT_BUS_DIMENSIONS_M.WIDTH,
+          height: DEFAULT_BUS_DIMENSIONS_M.HEIGHT,
+        },
+        {
+          height: DEFAULT_ANTENNA_DIMENSIONS_M.HEIGHT,
+          width: DEFAULT_ANTENNA_DIMENSIONS_M.WIDTH,
+          depth: DEFAULT_ANTENNA_DIMENSIONS_M.DEPTH,
+          rollAngle: DEFAULT_ANTENNA_ORIENTATION.ROLL,
+          pitchAngle: DEFAULT_ANTENNA_ORIENTATION.PITCH,
+          yawAngle: DEFAULT_ANTENNA_ORIENTATION.YAW,
+          initialElevationAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_ELEVATION,
+          initialAzimuthAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_AZIMUTH,
+        },
+        DEFAULT_ANTENNA_GAP_M
+      );
+    } catch (error) {
+      console.error('[SatelliteSettings] 엔티티 생성 오류:', error);
+    }
+  }
+
+  /**
    * 위성 엔티티로 카메라 이동 (탭 전환 시 호출)
    */
   flyToSatelliteEntity(): void {

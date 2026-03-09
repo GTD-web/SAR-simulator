@@ -353,9 +353,22 @@ export class SatelliteBusPayloadManager {
         if (this.axisEntities.xLabel) this.viewer.entities.remove(this.axisEntities.xLabel);
         if (this.axisEntities.yLabel) this.viewer.entities.remove(this.axisEntities.yLabel);
         if (this.axisEntities.zLabel) this.viewer.entities.remove(this.axisEntities.zLabel);
-        
+
         // 새로운 위치로 축 재생성
         this.createAxisLines();
+      }
+
+      // 안테나 XYZ 축 재생성 (버스와 동일한 방향 유지, 궤도 설정 시 velocityEcef 반영)
+      if (this.antennaAxisEntities) {
+        if (this.antennaAxisEntities.xAxis) this.viewer.entities.remove(this.antennaAxisEntities.xAxis);
+        if (this.antennaAxisEntities.yAxis) this.viewer.entities.remove(this.antennaAxisEntities.yAxis);
+        if (this.antennaAxisEntities.zAxis) this.viewer.entities.remove(this.antennaAxisEntities.zAxis);
+        if (this.antennaAxisEntities.xLabel) this.viewer.entities.remove(this.antennaAxisEntities.xLabel);
+        if (this.antennaAxisEntities.yLabel) this.viewer.entities.remove(this.antennaAxisEntities.yLabel);
+        if (this.antennaAxisEntities.zLabel) this.viewer.entities.remove(this.antennaAxisEntities.zLabel);
+        this.antennaAxisEntities = null;
+
+        this.createAntennaAxisLines();
       }
 
       console.log('[SatelliteBusPayloadManager] 위치 업데이트 완료:', position);

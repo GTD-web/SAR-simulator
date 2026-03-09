@@ -160,15 +160,19 @@ export class ControlPanelManager {
           targetContent.classList.add('active');
         }
 
-        // 위성 설정 탭 클릭 시 위성 엔티티로 카메라 이동
-        if (targetTab === 'satellite' && this.satelliteSettings) {
-          this.satelliteSettings.flyToSatelliteEntity();
+        // 위성 설정 탭 클릭 시 궤도 위 위치로 카메라 이동 (위성을 궤도에 배치 후 이동)
+        if (targetTab === 'satellite' && this.viewer) {
+          if (this.satelliteSettings) {
+            this.satelliteSettings.cancelCameraAnimation();
+          }
+          this.orbitSettings?.flyToOrbitPosition();
         }
 
-        // 궤도 설정 탭 클릭 시 해당 시각 궤도 위치로 카메라 이동
+        // 궤도 설정 탭 클릭 시 엔티티 위치로 카메라 이동 (엔티티 없으면 먼저 생성)
         if (targetTab === 'orbit' && this.viewer) {
           if (this.satelliteSettings) {
             this.satelliteSettings.cancelCameraAnimation();
+            this.satelliteSettings.ensureEntityExists();
           }
           this.orbitSettings?.flyToOrbitPosition();
         }
