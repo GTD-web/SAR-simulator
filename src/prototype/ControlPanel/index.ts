@@ -122,6 +122,7 @@ export class ControlPanelManager {
     this.orbitSettings.initialize(orbitTabContent, viewer, {
       busPayloadManager: this.satelliteSettings.getBusPayloadManager(),
     });
+    this.satelliteSettings.setOrbitSettings(this.orbitSettings);
 
     const targetOptions: TargetSettingsOptions = {
       onRegionInfoFetched: options?.onRegionInfoFetched ?? undefined,
@@ -247,8 +248,8 @@ export class ControlPanelManager {
       // trackedEntity 해제
       this.viewer.trackedEntity = undefined;
 
-      // 지구로 카메라 이동 (flyHome 사용)
-      this.viewer.camera.flyHome(1.5); // 1.5초 동안 이동
+      // 지구로 카메라 이동 (즉시)
+      this.viewer.camera.flyHome(0);
     } catch (error) {
       console.error('[ControlPanelManager] 지구로 카메라 이동 오류:', error);
     }

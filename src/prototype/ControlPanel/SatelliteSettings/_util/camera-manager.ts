@@ -66,8 +66,8 @@ export function setupCameraAngle(
 }
 
 /**
- * 카메라를 지정한 Cartesian3 위치로 이동 (위성 설정과 동일한 시점/거리)
- * @returns setTimeout 타이머 ID (취소 가능하도록)
+ * 카메라를 지정한 Cartesian3 위치로 즉시 이동 (위성 설정과 동일한 시점/거리)
+ * @returns null (즉시 이동이므로 타이머 없음)
  */
 export function flyToPosition(viewer: any, position: Cesium.Cartesian3): number | null {
   if (!viewer || !position) {
@@ -82,43 +82,17 @@ export function flyToPosition(viewer: any, position: Cesium.Cartesian3): number 
       viewer.camera.cancelFlight();
     }
 
-    const timerId = window.setTimeout(() => {
-      viewer.camera.flyTo({
-        destination: position,
-        orientation: {
-          heading: Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
-          pitch: Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
-          roll: 0.0
-        },
-        duration: CAMERA.ANIMATION_DURATION,
-        complete: () => {
-          viewer.camera.lookAt(
-            position,
-            new Cesium.HeadingPitchRange(
-              Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
-              Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
-              cameraRange
-            )
-          );
-        }
-      });
-    }, TIMER.CAMERA_ANIMATION_CANCEL_DELAY);
-
-    return timerId;
+    viewer.camera.lookAt(
+      position,
+      new Cesium.HeadingPitchRange(
+        Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
+        Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
+        cameraRange
+      )
+    );
+    return null;
   } catch (error) {
     console.error('[flyToPosition] 카메라 이동 오류:', error);
-    try {
-      viewer.camera.lookAt(
-        position,
-        new Cesium.HeadingPitchRange(
-          Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
-          Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
-          cameraRange
-        )
-      );
-    } catch (fallbackError) {
-      console.error('[flyToPosition] lookAt 폴백도 실패:', fallbackError);
-    }
     return null;
   }
 }

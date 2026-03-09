@@ -744,7 +744,7 @@ export class TargetSettings {
         if (pos) {
           const radius = 80000; // 80km — 타겟 영역이 보이도록
           const boundingSphere = new Cesium.BoundingSphere(pos, radius);
-          this.viewer.camera.flyToBoundingSphere(boundingSphere, { duration: 1.5 });
+          this.viewer.camera.flyToBoundingSphere(boundingSphere, { duration: 0 });
         }
       }
     } catch (error) {

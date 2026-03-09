@@ -266,6 +266,13 @@ export class OrbitSettings {
   }
 
   /**
+   * 현재 폼의 궤도 6요소·초기 시각으로 해당 시각의 궤도 위치 반환 (최초 접근 시 위성 배치용)
+   */
+  getOrbitPositionForInitialPlacement(): import('./_util/orbit-calculator.js').PositionAndVelocityAtEpoch | null {
+    return this.getOrbitPositionFromForm();
+  }
+
+  /**
    * 궤도 설정 탭 진입 시 해당 시각의 궤도 위치로 카메라 이동.
    * 진입 시 위성 엔티티가 있으면 먼저 해당 궤도 위치에 배치한 뒤 카메라를 이동한다.
    * 궤도 위치를 구할 수 없으면 위성 엔티티로, 없으면 지구 전경으로 이동.
@@ -309,7 +316,7 @@ export class OrbitSettings {
       this.viewer.camera.cancelFlight();
     }
     this.viewer.trackedEntity = undefined;
-    this.viewer.camera.flyHome(1.5);
+    this.viewer.camera.flyHome(0);
   }
 
   /**

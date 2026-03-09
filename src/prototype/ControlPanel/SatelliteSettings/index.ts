@@ -1,4 +1,5 @@
 import { SatelliteBusPayloadManager } from './SatelliteBusPayloadManager/index.js';
+import type { OrbitSettings } from '../OrbitSettings/index.js';
 import { PrototypeSwathPreview } from './_util/prototype-swath-preview.js';
 import { renderSatelliteSettingsForm, FormRendererCallbacks } from './_ui/form-renderer.js';
 import { updateEntity } from './_util/entity-updater.js';
@@ -25,6 +26,7 @@ export class SatelliteSettings {
   private container: HTMLElement | null;
   private viewer: any;
   private busPayloadManager: SatelliteBusPayloadManager | null;
+  private orbitSettingsRef: OrbitSettings | null;
   private swathPreview: PrototypeSwathPreview | null;
   private updateDebounceTimer: number | null;
   private currentDirectionInputId: string | null;
@@ -34,10 +36,18 @@ export class SatelliteSettings {
     this.container = null;
     this.viewer = null;
     this.busPayloadManager = null;
+    this.orbitSettingsRef = null;
     this.swathPreview = null;
     this.updateDebounceTimer = null;
     this.currentDirectionInputId = null;
     this.cameraAnimationTimer = null;
+  }
+
+  /**
+   * 궤도 설정 참조 설정 (최초 접근 시 궤도 위 위성 배치용)
+   */
+  setOrbitSettings(orbitSettings: OrbitSettings): void {
+    this.orbitSettingsRef = orbitSettings;
   }
 
   /**
@@ -53,42 +63,44 @@ export class SatelliteSettings {
     }
     this.render();
     
-    // 폼 렌더링 후 기본값으로 엔티티 자동 생성 및 카메라 이동
+    // 폼 렌더링 후 궤도 위에 위성 엔티티 자동 생성 및 카메라 이동
     if (this.viewer && this.busPayloadManager) {
-      // Cesium 초기 카메라 애니메이션이 완료될 때까지 기다린 후 엔티티 생성
+      // Cesium 초기 카메라 애니메이션이 완료될 때까지 기다린 후 궤도 위에 위성 배치
       waitForCameraReady(this.viewer, () => {
-        this.createInitialEntity();
+        this.createInitialEntityOnOrbit();
       });
     }
   }
 
-
   /**
-   * 초기 엔티티 생성 (탭 접근 시 자동 생성)
+   * 초기 엔티티 생성 - 궤도 6요소로 계산된 궤도 위 위치에 위성 배치
+   * (기존 DEFAULT_POSITION 우주 공간 배치 제거, 궤도 위 위성으로 바로 시작)
    */
-  private createInitialEntity(): void {
+  private createInitialEntityOnOrbit(): void {
     if (!this.busPayloadManager || !this.viewer) {
       console.error('[SatelliteSettings] 초기 엔티티 생성 실패: busPayloadManager 또는 viewer가 없습니다.');
       return;
     }
 
-    // 기본값으로 엔티티 직접 생성
+    const result = this.orbitSettingsRef?.getOrbitPositionForInitialPlacement();
+    if (!result) {
+      // 궤도 위치를 구할 수 없으면 지구 전경으로만 이동 (위성 엔티티 생성 안 함)
+      if (this.viewer.camera._flight && this.viewer.camera._flight.isActive()) {
+        this.viewer.camera.cancelFlight();
+      }
+      this.viewer.trackedEntity = undefined;
+      this.viewer.camera.flyHome(0);
+      return;
+    }
+
     try {
-      // 입력 필드에서 위치 정보 가져오기 (기본값 사용)
-      const lonInput = (document.getElementById('prototypeSatelliteLongitude') as HTMLInputElement)?.value || String(DEFAULT_POSITION.LONGITUDE);
-      const latInput = (document.getElementById('prototypeSatelliteLatitude') as HTMLInputElement)?.value || String(DEFAULT_POSITION.LATITUDE);
-      const altInput = (document.getElementById('prototypeSatelliteAltitude') as HTMLInputElement)?.value || String(DEFAULT_POSITION.ALTITUDE_KM);
-      
-      const longitude = parseFloat(lonInput) || DEFAULT_POSITION.LONGITUDE;
-      const latitude = parseFloat(latInput) || DEFAULT_POSITION.LATITUDE;
-      const altitudeKm = parseFloat(altInput) || DEFAULT_POSITION.ALTITUDE_KM;
-      
-      // km를 미터로 변환 (Cesium은 미터 단위 사용)
-      const altitude = altitudeKm * 1000;
-      
       this.busPayloadManager.createSatellite(
         DEFAULT_SATELLITE_INFO.NAME,
-        { longitude, latitude, altitude },
+        {
+          longitude: result.longitude,
+          latitude: result.latitude,
+          altitude: result.altitude,
+        },
         {
           length: DEFAULT_BUS_DIMENSIONS_M.LENGTH,
           width: DEFAULT_BUS_DIMENSIONS_M.WIDTH,
@@ -107,23 +119,37 @@ export class SatelliteSettings {
         DEFAULT_ANTENNA_GAP_M
       );
 
-      // 엔티티 생성 후 약간의 지연을 두고 카메라를 BUS에 고정
-      setTimeout(() => {
-        const busEntity = this.busPayloadManager?.getBusEntity();
-        
-        if (busEntity) {
-          // 카메라 각도 설정
-          setupCameraAngle(this.viewer, busEntity);
-          
-          // Cesium 캔버스가 포커스를 가져가지 않도록 설정
-          setupCanvasFocus(this.viewer);
-        } else {
-          console.error('[SatelliteSettings] BUS 엔티티를 찾을 수 없습니다.');
-        }
-      }, TIMER.ENTITY_CREATION_DELAY);
+      this.busPayloadManager.setVelocityDirectionEcef(
+        result.velocityEcef.x,
+        result.velocityEcef.y,
+        result.velocityEcef.z
+      );
+
+      // 엔티티가 씬에 렌더된 후 카메라 이동 (postRender로 대기)
+      this.flyToOrbitAfterEntityRendered();
     } catch (error) {
-      console.error('[SatelliteSettings] 초기 엔티티 생성 오류:', error);
+      console.error('[SatelliteSettings] 궤도 위 초기 엔티티 생성 오류:', error);
     }
+  }
+
+  /**
+   * 엔티티가 씬에 렌더된 후 궤도 위치로 카메라 이동
+   * (postRender로 2프레임 대기 후 이동하여 엔티티 로드 완료 보장)
+   */
+  private flyToOrbitAfterEntityRendered(): void {
+    if (!this.viewer?.scene) return;
+
+    let frameCount = 0;
+    const handler = () => {
+      frameCount++;
+      if (frameCount >= 2) {
+        this.viewer.scene.postRender.removeEventListener(handler);
+        this.orbitSettingsRef?.flyToOrbitPosition();
+        setupCanvasFocus(this.viewer);
+      }
+    };
+    this.viewer.scene.postRender.addEventListener(handler);
+    this.viewer.scene.requestRender();
   }
 
   /**
@@ -421,8 +447,8 @@ export class SatelliteSettings {
 
     const busEntity = this.busPayloadManager.getBusEntity();
     if (!busEntity) {
-      // 엔티티가 없으면 초기 엔티티 생성 후 카메라 이동
-      this.createInitialEntity();
+      // 엔티티가 없으면 궤도 위 초기 엔티티 생성 후 카메라 이동
+      this.createInitialEntityOnOrbit();
       return;
     }
 
