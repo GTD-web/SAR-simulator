@@ -1,11 +1,13 @@
 import {
   calculateOrbitPath,
+  calculateOrbitPathCentered,
   calculateOrbitalPeriod,
   getPositionAndVelocityAtEpoch,
   computeTimeOverPosition,
   type OrbitalElements,
   type PositionAndVelocityAtEpoch,
 } from './_util/orbit-calculator.js';
+import { orbitalElementsToTLE } from './_util/orbital-elements-to-tle.js';
 import { flyToPosition, setupCameraAngle } from '../SatelliteSettings/_util/camera-manager.js';
 
 export interface OrbitSettingsOptions {
@@ -21,8 +23,14 @@ export class OrbitSettings {
   private viewer: any;
   private busPayloadManager: import('../SatelliteSettings/SatelliteBusPayloadManager/index.js').SatelliteBusPayloadManager | null;
   private updateDebounceTimer: number | null;
-  /** 현재 위성 진행 30분 구간 궤도 경로 폴리라인 (XYZ 축 참고용) */
+  /** 궤도 경로 폴리라인 (30분 또는 전체 4시간) */
   private orbitPathEntity: any;
+  /** 궤도 6요소에서 생성한 TLE (시뮬레이션용) */
+  private currentTLE: string | null;
+  /** 시뮬레이션 활성화 여부 (시간 기반 궤도 전파) */
+  private simulationEnabled: boolean;
+  /** postRender 핸들러 (시뮬레이션 시 시간 기반 위치 업데이트) */
+  private postRenderHandler: (() => void) | null;
 
   constructor() {
     this.container = null;
@@ -30,6 +38,9 @@ export class OrbitSettings {
     this.busPayloadManager = null;
     this.updateDebounceTimer = null;
     this.orbitPathEntity = null;
+    this.currentTLE = null;
+    this.simulationEnabled = true; // 기본 시뮬레이션 활성화
+    this.postRenderHandler = null;
   }
 
   /**
@@ -183,6 +194,32 @@ export class OrbitSettings {
     form.addEventListener('change', handleOrbitInputChange);
     form.addEventListener('input', handleOrbitInputChange);
 
+    // 시뮬레이션 활성화 체크박스 (poc처럼 시간 기반 궤도 전파)
+    const simLabel = document.createElement('label');
+    simLabel.style.marginTop = '12px';
+    simLabel.style.display = 'flex';
+    simLabel.style.alignItems = 'center';
+    simLabel.style.gap = '8px';
+    simLabel.style.cursor = 'pointer';
+    const simCheckbox = document.createElement('input');
+    simCheckbox.type = 'checkbox';
+    simCheckbox.id = 'prototypeOrbitSimulationEnabled';
+    simCheckbox.checked = true; // 기본 시뮬레이션 활성화
+    const simText = document.createElement('span');
+    simText.textContent = '시뮬레이션 활성화 (시간 기반 궤도 전파, poc 방식)';
+    simLabel.appendChild(simCheckbox);
+    simLabel.appendChild(simText);
+    form.appendChild(simLabel);
+
+    simCheckbox.addEventListener('change', () => {
+      this.simulationEnabled = simCheckbox.checked;
+      if (this.simulationEnabled) {
+        this.startSimulationLoop();
+      } else {
+        this.stopSimulationLoop();
+      }
+    });
+
     // 진행 방향 표시 (Ascending / Descending)
     const passDirectionLabel = document.createElement('div');
     passDirectionLabel.id = 'prototypeOrbitPassDirection';
@@ -285,16 +322,23 @@ export class OrbitSettings {
 
     // 위성 엔티티가 있고 궤도 위치를 구할 수 있으면, 먼저 해당 궤도 위치에 위성 배치 (POC 방식: ECEF 속도 벡터로 X축 정렬)
     if (result && this.busPayloadManager && busEntity) {
-      this.busPayloadManager.setVelocityDirectionEcef(result.velocityEcef.x, result.velocityEcef.y, result.velocityEcef.z);
       this.busPayloadManager.updatePosition({
         longitude: result.longitude,
         latitude: result.latitude,
         altitude: result.altitude,
       });
+      this.busPayloadManager.setVelocityDirectionEcef(result.velocityEcef.x, result.velocityEcef.y, result.velocityEcef.z);
+
+      // 시뮬레이션 기본 활성화: TLE 생성 및 루프 시작
+      const parsed = this.getElementsAndEpochTimeFromForm();
+      if (parsed && this.simulationEnabled) {
+        this.currentTLE = orbitalElementsToTLE(parsed.elements, parsed.epochTime, 'Orbit6Elements', 99999);
+        this.startSimulationLoop();
+      }
     }
 
-    // 진행 30분 궤도 경로 그리기 (XYZ 축 참고용)
-    this.drawOrbitPath30Min();
+    // 궤도 경로 그리기
+    this.drawOrbitPath();
 
     if (result) {
       this.updatePassDirectionDisplay(result.passDirection);
@@ -376,9 +420,11 @@ export class OrbitSettings {
   }
 
   /**
-   * 현재 위성 진행 30분 구간 궤도 경로만 그림 (XYZ 축·진행방향 참고용)
+   * 궤도 경로 그리기
+   * 시뮬레이션 시: CallbackProperty로 매 프레임 동적 계산 → 제거/재생성 없이 부드럽게 갱신 (깜빡임 방지)
+   * 비시뮬레이션 시: 30분 구간 정적 경로
    */
-  private drawOrbitPath30Min(): void {
+  private drawOrbitPath(): void {
     this.clearOrbitPath();
     if (!this.viewer) return;
 
@@ -386,28 +432,176 @@ export class OrbitSettings {
     if (!parsed) return;
 
     const { elements, epochTime } = parsed;
-    const durationHours = 0.5; // 30분
-    const sampleIntervalMinutes = 1 / 6; // 10초 간격 (181점) — 줌인해도 보이는 구간에 점이 많아 곡선으로 보임
-    const positions = calculateOrbitPath(elements, epochTime, durationHours, sampleIntervalMinutes);
-    if (positions.length === 0) return;
 
-    this.orbitPathEntity = this.viewer.entities.add({
-      name: '위성 진행 30분 경로 (참고용)',
-      polyline: {
-        positions: positions,
-        width: 2,
-        material: Cesium.Color.ORANGE.withAlpha(0.9),
-        clampToGround: false,
-        arcType: Cesium.ArcType.NONE,
-        show: true,
-      },
-    });
+    if (this.simulationEnabled) {
+      // CallbackProperty: 제거/재생성 없이 시계에 따라 궤도 경로만 갱신 → 깜빡임 없음
+      const positionsProperty = new Cesium.CallbackProperty(() => {
+        const centerTime = this.viewer?.clock?.currentTime ?? epochTime;
+        return calculateOrbitPathCentered(elements, epochTime, centerTime, 4, 5);
+      }, false);
+
+      this.orbitPathEntity = this.viewer.entities.add({
+        name: '궤도 경로 (4시간, poc 방식)',
+        polyline: {
+          positions: positionsProperty,
+          width: 4,
+          material: new Cesium.PolylineGlowMaterialProperty({
+            glowPower: 0.3,
+            color: Cesium.Color.ORANGE.withAlpha(0.7),
+          }),
+          clampToGround: false,
+          arcType: Cesium.ArcType.GEODESIC,
+          show: true,
+        },
+      });
+    } else {
+      const durationHours = 0.5;
+      const sampleIntervalMinutes = 1 / 6;
+      const positions = calculateOrbitPath(elements, epochTime, durationHours, sampleIntervalMinutes);
+      if (positions.length === 0) return;
+
+      this.orbitPathEntity = this.viewer.entities.add({
+        name: '위성 진행 30분 경로 (참고용)',
+        polyline: {
+          positions: positions,
+          width: 2,
+          material: Cesium.Color.ORANGE.withAlpha(0.9),
+          clampToGround: false,
+          arcType: Cesium.ArcType.NONE,
+          show: true,
+        },
+      });
+    }
   }
 
   private clearOrbitPath(): void {
     if (this.orbitPathEntity && this.viewer) {
       this.viewer.entities.remove(this.orbitPathEntity);
       this.orbitPathEntity = null;
+    }
+  }
+
+  /**
+   * TLE로부터 특정 시각의 위치·속도 계산 (satellite.js SGP4)
+   */
+  private getPositionFromTLE(
+    tleText: string,
+    time: Cesium.JulianDate
+  ): { longitude: number; latitude: number; altitude: number; velocityEcef: { x: number; y: number; z: number } } | null {
+    const sat = (window as any).satellite;
+    if (!sat) return null;
+    try {
+      const lines = tleText.trim().split('\n');
+      const line1 = lines.length >= 2 ? lines[lines.length - 2] : lines[0];
+      const line2 = lines.length >= 2 ? lines[lines.length - 1] : lines[1];
+      const satrec = sat.twoline2satrec(line1, line2);
+      const date = Cesium.JulianDate.toDate(time);
+      const posVel = sat.propagate(satrec, date);
+      if (posVel.error) return null;
+      const gmst = sat.gstime(date);
+      const geodetic = sat.eciToGeodetic(posVel.position, gmst);
+      const longitude = sat.degreesLong(geodetic.longitude);
+      const latitude = sat.degreesLat(geodetic.latitude);
+      const altitude = geodetic.height * 1000; // km → m
+
+      // ECI 속도 → ECEF 속도 (지구 자전 보정)
+      const EARTH_OMEGA = 7.292115e-5; // rad/s
+      const cosG = Math.cos(gmst);
+      const sinG = Math.sin(gmst);
+      const rx = posVel.position.x;
+      const ry = posVel.position.y;
+      const rz = posVel.position.z;
+      const vx = posVel.velocity.x;
+      const vy = posVel.velocity.y;
+      const vz = posVel.velocity.z;
+      const rEcefX = rx * cosG + ry * sinG;
+      const rEcefY = -rx * sinG + ry * cosG;
+      const vRotX = vx * cosG + vy * sinG;
+      const vRotY = -vx * sinG + vy * cosG;
+      const vEcefX = vRotX + EARTH_OMEGA * rEcefY;
+      const vEcefY = vRotY - EARTH_OMEGA * rEcefX;
+      const vEcefZ = vz;
+      const mag = Math.sqrt(vEcefX * vEcefX + vEcefY * vEcefY + vEcefZ * vEcefZ);
+      const velocityEcef =
+        mag > 1e-10
+          ? { x: vEcefX / mag, y: vEcefY / mag, z: vEcefZ / mag }
+          : { x: vEcefX, y: vEcefY, z: vEcefZ };
+
+      return { longitude, latitude, altitude, velocityEcef };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 시뮬레이션 루프 시작 (postRender에서 TLE 기반 위치 업데이트)
+   */
+  private startSimulationLoop(): void {
+    this.stopSimulationLoop();
+    if (!this.viewer || !this.busPayloadManager?.getBusEntity() || !this.currentTLE) {
+      console.warn('[OrbitSettings] 시뮬레이션 시작 불가: 뷰어/위성/TLE 필요');
+      return;
+    }
+
+    // 뷰어 시계를 epoch에 맞춰 궤도와 위성이 동일 시점에서 시작
+    const parsed = this.getElementsAndEpochTimeFromForm();
+    if (parsed && this.viewer.clock) {
+      this.viewer.clock.currentTime = Cesium.JulianDate.addSeconds(
+        parsed.epochTime,
+        0,
+        new Cesium.JulianDate()
+      );
+      this.viewer.clock.shouldAnimate = true;
+    }
+
+    this.postRenderHandler = () => {
+      if (!this.currentTLE || !this.busPayloadManager?.getBusEntity()) return;
+      const currentTime = this.viewer.clock.currentTime;
+      const pos = this.getPositionFromTLE(this.currentTLE, currentTime);
+      if (pos) {
+        // 위치를 먼저 업데이트한 뒤 속도 방향(진행 방향) 설정 (순서 중요)
+        this.busPayloadManager.updatePosition({
+          longitude: pos.longitude,
+          latitude: pos.latitude,
+          altitude: pos.altitude,
+        });
+        this.busPayloadManager.setVelocityDirectionEcef(
+          pos.velocityEcef.x,
+          pos.velocityEcef.y,
+          pos.velocityEcef.z
+        );
+      }
+      // 궤도 경로는 CallbackProperty로 매 프레임 자동 갱신 → 별도 drawOrbitPath 호출 불필요
+    };
+    this.viewer.scene.postRender.addEventListener(this.postRenderHandler);
+    this.drawOrbitPath();
+
+    // 즉시 위성 위치 업데이트 (첫 프레임 대기 없이 궤도 위에 배치)
+    const currentTime = this.viewer.clock.currentTime;
+    const pos = this.getPositionFromTLE(this.currentTLE!, currentTime);
+    if (pos) {
+      this.busPayloadManager!.updatePosition({
+        longitude: pos.longitude,
+        latitude: pos.latitude,
+        altitude: pos.altitude,
+      });
+      this.busPayloadManager!.setVelocityDirectionEcef(
+        pos.velocityEcef.x,
+        pos.velocityEcef.y,
+        pos.velocityEcef.z
+      );
+    }
+
+    console.log('[OrbitSettings] 시뮬레이션 루프 시작 (TLE 기반)');
+  }
+
+  /**
+   * 시뮬레이션 루프 중지
+   */
+  private stopSimulationLoop(): void {
+    if (this.postRenderHandler && this.viewer) {
+      this.viewer.scene.postRender.removeEventListener(this.postRenderHandler);
+      this.postRenderHandler = null;
     }
   }
 
@@ -500,8 +694,21 @@ export class OrbitSettings {
         altitude: result.altitude,
       });
 
-      // 진행 30분 궤도 경로 그리기 (XYZ 축 참고용)
-      this.drawOrbitPath30Min();
+      // 궤도 6요소에서 TLE 생성 (시뮬레이션용, satellite.js SGP4 전파)
+      this.currentTLE = orbitalElementsToTLE(elements, epochTime, 'Orbit6Elements', 99999);
+      if (this.currentTLE) {
+        console.log('[OrbitSettings] TLE 생성 완료:\n', this.currentTLE);
+      }
+
+      // 궤도 경로 그리기
+      this.drawOrbitPath();
+
+      // 시뮬레이션이 활성화되어 있으면 루프 시작
+      const simCheck = (this.container || document).querySelector('#prototypeOrbitSimulationEnabled') as HTMLInputElement;
+      if (simCheck?.checked) {
+        this.simulationEnabled = true;
+        this.startSimulationLoop();
+      }
 
       // 궤도 변경 시 카메라도 새 위치로 이동
       const position = Cesium.Cartesian3.fromDegrees(
@@ -546,6 +753,7 @@ export class OrbitSettings {
       clearTimeout(this.updateDebounceTimer);
       this.updateDebounceTimer = null;
     }
+    this.stopSimulationLoop();
     this.clearOrbitPath();
     if (this.container) {
       this.container.innerHTML = '';

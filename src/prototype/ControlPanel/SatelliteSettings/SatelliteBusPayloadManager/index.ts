@@ -295,13 +295,14 @@ export class SatelliteBusPayloadManager {
 
   /**
    * XYZ 축 방향선 생성 (BUS)
+   * getCurrentCartesian getter 사용으로 시뮬레이션 시 매 프레임 최신 위치 반영, 축 제거/재생성 불필요
    */
   private createAxisLines(): void {
-    if (!this.viewer || !this.position || !this.currentCartesian) return;
+    if (!this.viewer || !this.position) return;
 
     this.axisEntities = createAxisEntities(
       this.viewer,
-      this.currentCartesian,
+      () => this.currentCartesian,
       this.axisLength,
       this.axisVisible,
       this.getVelocityOptions(),
@@ -321,7 +322,7 @@ export class SatelliteBusPayloadManager {
       this.axisLength,
       this.axisVisible,
       this.getVelocityOptions(),
-      this.currentCartesian,
+      () => this.currentCartesian,
       () => this.busOrientation ?? undefined,
       () => this.antennaParams
         ? {
@@ -397,34 +398,8 @@ export class SatelliteBusPayloadManager {
         }
       }
 
-      // XYZ 축 재생성 (currentCartesian 업데이트 반영)
-      if (this.axisEntities) {
-        // 기존 축 제거
-        if (this.axisEntities.xAxis) this.viewer.entities.remove(this.axisEntities.xAxis);
-        if (this.axisEntities.yAxis) this.viewer.entities.remove(this.axisEntities.yAxis);
-        if (this.axisEntities.zAxis) this.viewer.entities.remove(this.axisEntities.zAxis);
-        if (this.axisEntities.xLabel) this.viewer.entities.remove(this.axisEntities.xLabel);
-        if (this.axisEntities.yLabel) this.viewer.entities.remove(this.axisEntities.yLabel);
-        if (this.axisEntities.zLabel) this.viewer.entities.remove(this.axisEntities.zLabel);
-
-        // 새로운 위치로 축 재생성
-        this.createAxisLines();
-      }
-
-      // 안테나 XYZ 축 재생성 (버스와 동일한 방향 유지, 궤도 설정 시 velocityEcef 반영)
-      if (this.antennaAxisEntities) {
-        if (this.antennaAxisEntities.xAxis) this.viewer.entities.remove(this.antennaAxisEntities.xAxis);
-        if (this.antennaAxisEntities.yAxis) this.viewer.entities.remove(this.antennaAxisEntities.yAxis);
-        if (this.antennaAxisEntities.zAxis) this.viewer.entities.remove(this.antennaAxisEntities.zAxis);
-        if (this.antennaAxisEntities.xLabel) this.viewer.entities.remove(this.antennaAxisEntities.xLabel);
-        if (this.antennaAxisEntities.yLabel) this.viewer.entities.remove(this.antennaAxisEntities.yLabel);
-        if (this.antennaAxisEntities.zLabel) this.viewer.entities.remove(this.antennaAxisEntities.zLabel);
-        this.antennaAxisEntities = null;
-
-        this.createAntennaAxisLines();
-      }
-
-      console.log('[SatelliteBusPayloadManager] 위치 업데이트 완료:', position);
+      // XYZ 축·안테나 축: getter 사용으로 CallbackProperty가 매 프레임 최신값 참조 → 제거/재생성 불필요
+      // (시뮬레이션 시 매 프레임 updatePosition 호출해도 축 유지)
     } catch (error) {
       console.error('[SatelliteBusPayloadManager] 위치 업데이트 오류:', error);
     }
