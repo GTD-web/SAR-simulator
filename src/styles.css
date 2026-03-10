@@ -6,13 +6,21 @@ html, body, #cesiumContainer {
   overflow: hidden;
 }
 
-/* 사이드바 스타일 */
+/* Cesium 타임라인 (시뮬레이션 시간 컨트롤) - 화면 하단 */
+.cesium-viewer-timelineContainer,
+.cesium-viewer-animationContainer {
+  z-index: 999;
+}
+
+/* 사이드바 스타일 - 위아래 여백이 있는 플로팅 디자인 (하단 여백으로 시뮬레이션 버튼 노출) */
 #sidebar {
   position: fixed;
-  left: 0;
-  top: 0;
+  left: 16px;
+  top: 16px;
+  bottom: 120px;
   width: 380px;
-  height: 100vh;
+  height: auto;
+  min-height: 0;
   background: rgba(42, 42, 42, 0.95);
   color: white;
   font-family: sans-serif;
@@ -20,16 +28,21 @@ html, body, #cesiumContainer {
   display: flex;
   flex-direction: column;
   box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  overflow: hidden;
   transition: all 0.3s ease;
 }
 
 /* 두 번째 사이드바 (Swath 그룹) - 왼쪽 제어 패널 옆에 배치 */
 #swathGroupsSidebar {
   position: fixed;
-  left: 380px;
-  top: 0;
+  left: 412px; /* 16 + 380 + 16 (사이드바 오프셋 + 너비 + 간격) */
+  top: 16px;
+  bottom: 55px;
   width: 300px;
-  height: 100vh;
+  height: auto;
+  min-height: 0;
+  border-radius: 8px;
   background: rgba(42, 42, 42, 0.95);
   color: white;
   font-family: sans-serif;
@@ -208,11 +221,12 @@ html, body, #cesiumContainer {
 #sidebar.collapsed {
   width: 50px;
   transform: translateX(0);
+  left: 16px;
 }
 
 /* 제어 패널이 접혔을 때 Swath 그룹 사이드바 위치 조정 */
 #sidebar.collapsed ~ #swathGroupsSidebar:not(.collapsed) {
-  left: 50px;
+  left: 82px; /* 16 + 50 + 16 */
 }
 
 /* 세 번째 사이드바 (Signal 결과) - Swath 그룹 사이드바 옆에 배치 */
@@ -779,11 +793,11 @@ html, body, #cesiumContainer {
   border-color: #45a049;
 }
 
-/* 위성으로 이동 버튼 (화면 하단 중앙, 아이콘) */
+/* 위성으로 이동 버튼 (화면 하단 중앙, 타임라인 위) */
 .fly-to-satellite-button {
   position: fixed;
   left: 50%;
-  bottom: 20px;
+  bottom: 55px;
   transform: translateX(-50%);
   z-index: 1001;
   display: flex;

@@ -444,6 +444,24 @@ export class OrbitSettings {
       this.simulationEnabled = startSimulation;
       this.drawOrbitPath();
 
+      // 타임라인 시뮬레이션 시간 범위 설정 (Initial Time 기반)
+      const periodSeconds = calculateOrbitalPeriod(elements.semiMajorAxis) * 3600;
+      const startTime = epochTime;
+      const stopTime = Cesium.JulianDate.addSeconds(
+        epochTime,
+        2 * periodSeconds,
+        new Cesium.JulianDate()
+      );
+      if (this.viewer.clock) {
+        this.viewer.clock.startTime = Cesium.JulianDate.addSeconds(startTime, 0, new Cesium.JulianDate());
+        this.viewer.clock.stopTime = Cesium.JulianDate.addSeconds(stopTime, 0, new Cesium.JulianDate());
+        this.viewer.clock.currentTime = Cesium.JulianDate.addSeconds(startTime, 0, new Cesium.JulianDate());
+        this.viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
+      }
+      if (this.viewer.timeline) {
+        this.viewer.timeline.zoomTo(startTime, stopTime);
+      }
+
       if (startSimulation) {
         this.startSimulationLoop();
         this.startTracking(true); // 현재 시점 유지하며 위성 추적 시작
