@@ -729,6 +729,20 @@ export class SatelliteBusPayloadManager {
   }
 
   /**
+   * BUS 현재 ECEF 좌표 반환 (미니맵 축 표시 등에 사용)
+   */
+  getBusCartesian(): any {
+    return this.currentCartesian ?? null;
+  }
+
+  /**
+   * 축 계산용 옵션 반환 (미니맵 축 표시 등에 사용)
+   */
+  getAxisOptionsForMiniMap(): { busOrientation?: { rollAngle: number; pitchAngle: number; yawAngle: number } } & ReturnType<typeof this.getVelocityOptions> {
+    return this.getAxisOptions();
+  }
+
+  /**
    * BUS Y축 방향 (정규화된 ECEF 단위 벡터) 반환. 안테나 축이 BUS와 동일하므로 Y축 지표면 직선 등에 사용
    */
   getBusYAxisDirection(): any {

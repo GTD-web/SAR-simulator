@@ -4,7 +4,7 @@ import type { SatelliteBusPayloadManager } from '../SatelliteBusPayloadManager/i
 /** Y축 지표면 접촉점 기준 swath 간격 (m) */
 const SWATH_SPACING_M = 5000;
 
-const MINI_MAP_SIZE = 200;
+const MINI_MAP_SIZE = 250;
 const MINI_MAP_PADDING_FACTOR = 1.5;
 
 /**

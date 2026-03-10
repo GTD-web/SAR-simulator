@@ -1,6 +1,7 @@
 import { SatelliteBusPayloadManager } from './SatelliteBusPayloadManager/index.js';
 import type { OrbitSettings } from '../OrbitSettings/index.js';
 import { PrototypeSwathPreview } from './_util/prototype-swath-preview.js';
+import { AttitudeMiniMapViewer } from './_util/attitude-mini-map-viewer.js';
 import { renderSatelliteSettingsForm, FormRendererCallbacks } from './_ui/form-renderer.js';
 import { updateEntity } from './_util/entity-updater.js';
 import { createSatelliteEntity } from './_util/entity-creator.js';
@@ -37,6 +38,7 @@ export class SatelliteSettings {
   private busPayloadManager: SatelliteBusPayloadManager | null;
   private orbitSettingsRef: OrbitSettings | null;
   private swathPreview: PrototypeSwathPreview | null;
+  private attitudeMiniMap: AttitudeMiniMapViewer | null;
   private updateDebounceTimer: number | null;
   private currentDirectionInputId: string | null;
   private cameraAnimationTimer: number | null;
@@ -47,6 +49,7 @@ export class SatelliteSettings {
     this.busPayloadManager = null;
     this.orbitSettingsRef = null;
     this.swathPreview = null;
+    this.attitudeMiniMap = null;
     this.updateDebounceTimer = null;
     this.currentDirectionInputId = null;
     this.cameraAnimationTimer = null;
@@ -69,6 +72,8 @@ export class SatelliteSettings {
       this.busPayloadManager = new SatelliteBusPayloadManager(this.viewer);
       this.swathPreview = new PrototypeSwathPreview(this.viewer, this.busPayloadManager);
       this.swathPreview.init();
+      this.attitudeMiniMap = new AttitudeMiniMapViewer(this.viewer, this.busPayloadManager);
+      this.attitudeMiniMap.init();
     }
     this.render();
     
@@ -504,6 +509,13 @@ export class SatelliteSettings {
   }
 
   /**
+   * 자세 미니맵 반환 (카메라 위치 조정 등)
+   */
+  getAttitudeMiniMap(): AttitudeMiniMapViewer | null {
+    return this.attitudeMiniMap;
+  }
+
+  /**
    * 위성 엔티티로 이동하는 카메라 애니메이션 취소
    */
   cancelCameraAnimation(): void {
@@ -543,6 +555,10 @@ export class SatelliteSettings {
     if (this.swathPreview) {
       this.swathPreview.clear();
       this.swathPreview = null;
+    }
+    if (this.attitudeMiniMap) {
+      this.attitudeMiniMap.clear();
+      this.attitudeMiniMap = null;
     }
     if (this.busPayloadManager) {
       this.busPayloadManager.removeSatellite();
