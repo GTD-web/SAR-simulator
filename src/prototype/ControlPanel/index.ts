@@ -19,6 +19,7 @@ export class ControlPanelManager {
   private targetSettings: TargetSettings | null;
   private viewer: any;
   private regionInfoPanel: HTMLElement | null;
+  private flyToSatelliteButton: HTMLButtonElement | null;
 
   constructor() {
     this.sidebar = null;
@@ -28,6 +29,7 @@ export class ControlPanelManager {
     this.targetSettings = null;
     this.viewer = null;
     this.regionInfoPanel = null;
+    this.flyToSatelliteButton = null;
   }
 
   /**
@@ -136,6 +138,19 @@ export class ControlPanelManager {
 
     // 기본으로 위성 설정 탭 활성화 (서버 초기화 시)
     this.activateTab('satellite');
+
+    // 위성으로 이동 버튼 (화면 하단 중앙, 아이콘)
+    this.flyToSatelliteButton = document.createElement('button');
+    this.flyToSatelliteButton.className = 'fly-to-satellite-button';
+    this.flyToSatelliteButton.title = '화면 가운데 위성으로 카메라 이동';
+    this.flyToSatelliteButton.setAttribute('aria-label', '위성으로 이동');
+    this.flyToSatelliteButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="24" height="24"><style>.st0{fill:currentColor}</style><g><path class="st0" d="M321.637,234.88c-22.205,0-44.402,8.47-61.349,25.417c-33.86,33.869-33.86,88.793,0,122.679l122.688-122.679 C366.037,243.349,343.832,234.88,321.637,234.88z M273.637,273.646c12.823-12.832,29.867-19.888,48-19.888 c11.654,0,22.854,2.914,32.78,8.408l-92.234,92.224C247.991,328.596,251.809,295.464,273.637,273.646z"/><path class="st0" d="M135.467,55.819l-79.648,79.648l146.068,146.069l79.666-79.666L135.467,55.819z M82.509,135.467l52.958-52.958 L254.864,201.87l-52.976,52.976L82.509,135.467z"/><path class="st0" d="M413.29,68.063L345.219,0L223.11,122.118l68.062,68.071L413.29,68.063z M326.683,129.508l-15.86-15.851 l25.944-25.944l15.851,15.842L326.683,129.508z M388.101,68.063l-24.311,24.31l-15.842-15.85l24.302-24.302L388.101,68.063z M345.219,25.216l15.842,15.833L336.767,65.36l-15.841-15.851L345.219,25.216z M309.744,60.699l15.833,15.825l-25.926,25.952 L283.8,86.634L309.744,60.699z M248.317,122.118l24.303-24.302l15.841,15.842l-24.31,24.293L248.317,122.118z M299.633,124.83 l15.851,15.85l-24.302,24.302l-15.833-15.833L299.633,124.83z"/><path class="st0" d="M0.009,345.21l68.072,68.063l122.118-122.118l-68.054-68.045L0.009,345.21z M86.652,283.783l15.842,15.842 l-25.944,25.952l-15.841-15.851L86.652,283.783z M25.224,345.21l24.293-24.294l15.842,15.833L41.066,361.06L25.224,345.21z M68.081,388.075L52.23,372.242l24.32-24.312l15.834,15.833L68.081,388.075z M103.573,352.6l-15.851-15.851l25.943-25.952 l15.842,15.851L103.573,352.6z M164.992,291.172l-24.286,24.294l-15.851-15.842l24.294-24.293L164.992,291.172z M113.665,288.442 l-15.85-15.824l24.328-24.32l15.833,15.842L113.665,288.442z"/><path class="st0" d="M363.422,338.522c-6.864-6.846-18.01-6.854-24.856,0c-6.89,6.864-6.89,18.019-0.017,24.882 c6.881,6.872,18.01,6.872,24.873,0C370.293,356.541,370.293,345.412,363.422,338.522z"/><path class="st0" d="M493.683,378.64c-5.292,27.61-18.536,53.888-39.836,75.18c-21.31,21.31-47.587,34.562-75.172,39.881 L382.194,512c31.087-5.976,60.831-20.993,84.835-44.997c24.004-24.004,39.002-53.756,44.962-84.852L493.683,378.64z"/><path class="st0" d="M466.433,372.277l-18.343-3.344c-3.484,19.089-12.49,37.248-27.181,51.94 c-14.701,14.692-32.877,23.714-51.949,27.225l3.361,18.325c22.608-4.124,44.313-14.92,61.77-32.377 C451.53,416.608,462.316,394.894,466.433,372.277z"/><path class="st0" d="M401.143,401.108c10.928-10.928,17.492-24.645,19.748-38.82l-18.396-2.949 c-1.702,10.532-6.494,20.538-14.542,28.586v0.008c-8.066,8.049-18.063,12.849-28.586,14.543l2.967,18.396 c14.157-2.265,27.866-8.829,38.792-19.757L401.143,401.108z"/></g></svg>`;
+    this.flyToSatelliteButton.addEventListener('click', () => this.flyToSatellite());
+    document.body.appendChild(this.flyToSatelliteButton);
+
+    // 프로토타입 로드 완료 후 사이드바 표시
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) sidebar.style.visibility = 'visible';
   }
 
   /**
@@ -162,30 +177,26 @@ export class ControlPanelManager {
           targetContent.classList.add('active');
         }
 
-        // 위성 설정 탭 클릭 시 궤도 위 위치로 카메라 이동 (위성을 궤도에 배치 후 이동)
-        if (targetTab === 'satellite' && this.viewer) {
-          if (this.satelliteSettings) {
-            this.satelliteSettings.cancelCameraAnimation();
-          }
-          this.orbitSettings?.flyToOrbitPosition();
+        // 위성 설정 탭 클릭 시 (카메라 이동 없음)
+        if (targetTab === 'satellite' && this.satelliteSettings) {
+          this.satelliteSettings.cancelCameraAnimation();
         }
 
-        // 궤도 설정 탭 클릭 시 엔티티 위치로 카메라 이동
+        // 궤도 설정 탭 클릭 시 엔티티만 생성 (카메라 이동 없음)
         if (targetTab === 'orbit' && this.viewer) {
           if (this.satelliteSettings) {
             this.satelliteSettings.cancelCameraAnimation();
             this.satelliteSettings.ensureEntityExists();
           }
-          this.orbitSettings?.flyToOrbitPosition(true);
+          this.orbitSettings?.prepareOrbitTab();
         }
 
-        // 타겟 설정 탭 클릭 시 해당 타겟으로 카메라 이동 + 우측 지역 정보 패널 표시 (JSON은 '지역 정보 가져오기' 버튼으로만 생성)
+        // 타겟 설정 탭 클릭 시 우측 지역 정보 패널 표시 (카메라 이동 없음)
         if (targetTab === 'target' && this.targetSettings) {
           this.orbitSettings?.stopCameraTracking();
           if (this.satelliteSettings) {
             this.satelliteSettings.cancelCameraAnimation();
           }
-          this.targetSettings.flyToTarget();
           if (this.regionInfoPanel) {
             this.regionInfoPanel.classList.remove('hidden');
           }
@@ -234,6 +245,25 @@ export class ControlPanelManager {
   }
 
   /**
+   * 위성으로 카메라 이동 (버튼 클릭 시 호출)
+   */
+  private flyToSatellite(): void {
+    if (!this.viewer) return;
+    if (this.satelliteSettings) {
+      this.satelliteSettings.cancelCameraAnimation();
+      this.satelliteSettings.ensureEntityExists();
+    }
+    // 이미 추적 중이면 무시
+    if (this.orbitSettings?.isTracking()) return;
+    // 시뮬레이션 중이면 추적만 시작 (시뮬레이션 중지하지 않음)
+    if (this.orbitSettings?.isSimulationRunning()) {
+      this.orbitSettings.startTracking();
+      return;
+    }
+    this.orbitSettings?.flyToOrbitPosition(false);
+  }
+
+  /**
    * 지구로 카메라 이동
    */
   private flyToEarth(): void {
@@ -268,6 +298,10 @@ export class ControlPanelManager {
    * 제어 패널 정리
    */
   cleanup(): void {
+    if (this.flyToSatelliteButton && this.flyToSatelliteButton.parentNode) {
+      this.flyToSatelliteButton.parentNode.removeChild(this.flyToSatelliteButton);
+      this.flyToSatelliteButton = null;
+    }
     if (this.satelliteSettings) {
       this.satelliteSettings.cleanup();
       this.satelliteSettings = null;

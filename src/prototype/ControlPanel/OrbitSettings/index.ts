@@ -8,6 +8,7 @@ import {
   setupCameraAngle,
   restoreZoomDistance,
 } from '../SatelliteSettings/_util/camera-manager.js';
+import { calculateCameraRange } from '../SatelliteSettings/_util/entity-creator.js';
 import { CAMERA } from '../SatelliteSettings/constants.js';
 import { getPositionFromTLE } from './_util/tle-position-util.js';
 import {
@@ -99,7 +100,38 @@ export class OrbitSettings {
   }
 
   /**
-   * 궤도 설정 탭 진입 시 해당 시각의 궤도 위치로 카메라 이동.
+   * 궤도 설정 탭 진입 시 궤도선·위성 위치만 갱신 (카메라 이동 없음)
+   */
+  prepareOrbitTab(): void {
+    if (!this.viewer) return;
+
+    this.stopSimulationLoop();
+    this.simulationEnabled = false;
+
+    const result = this.getOrbitPositionFromForm();
+    const busEntity = this.busPayloadManager?.getBusEntity();
+
+    if (result && this.busPayloadManager && busEntity) {
+      this.busPayloadManager.updatePosition({
+        longitude: result.longitude,
+        latitude: result.latitude,
+        altitude: result.altitude,
+      });
+      this.busPayloadManager.setVelocityDirectionEcef(
+        result.velocityEcef.x,
+        result.velocityEcef.y,
+        result.velocityEcef.z
+      );
+    }
+
+    this.drawOrbitPath();
+    if (result) {
+      this.updatePassDirectionDisplay(result.passDirection);
+    }
+  }
+
+  /**
+   * 위성/궤도 위치로 카메라 이동 (버튼 클릭 시 호출)
    */
   flyToOrbitPosition(trackEntity = false): void {
     if (!this.viewer) return;
@@ -146,12 +178,13 @@ export class OrbitSettings {
         );
       }
       this.stopTracking();
+      const cameraRange = calculateCameraRange();
       this.viewer.camera.lookAt(
         position,
         new Cesium.HeadingPitchRange(
           Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
           Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
-          CAMERA.ORBIT_TAB_ZOOM_RANGE
+          cameraRange
         )
       );
       return;
@@ -162,12 +195,13 @@ export class OrbitSettings {
         this.stopTracking();
         const pos = busEntity.position?.getValue(Cesium.JulianDate.now());
         if (pos) {
+          const cameraRange = calculateCameraRange();
           this.viewer.camera.lookAt(
             pos,
             new Cesium.HeadingPitchRange(
               Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
               Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
-              CAMERA.ORBIT_TAB_ZOOM_RANGE
+              cameraRange
             )
           );
         }
@@ -236,8 +270,9 @@ export class OrbitSettings {
   /**
    * 위성에 카메라 고정 시작 (엔티티 더블클릭과 동일: zoomTo + trackedEntity)
    * box geometry 버그 → bus와 같은 position을 쓰는 point 프록시로 추적
+   * @param preserveView true면 zoomTo 생략, 현재 카메라 위치 유지하며 추적만 시작
    */
-  startTracking(): boolean {
+  startTracking(preserveView = false): boolean {
     const busEntity = this.busPayloadManager?.getBusEntity();
     if (!busEntity || !this.viewer) return false;
     this.stopTracking();
@@ -253,12 +288,14 @@ export class OrbitSettings {
       show: false,
     });
 
-    const offset = new Cesium.HeadingPitchRange(
-      Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
-      Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
-      CAMERA.ORBIT_TAB_ZOOM_RANGE
-    );
-    this.viewer.zoomTo(this.trackProxyEntity, { offset });
+    if (!preserveView) {
+      const offset = new Cesium.HeadingPitchRange(
+        Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
+        Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
+        CAMERA.ORBIT_TAB_ZOOM_RANGE
+      );
+      this.viewer.zoomTo(this.trackProxyEntity, { offset, duration: 0 });
+    }
     this.viewer.trackedEntity = this.trackProxyEntity;
     this.viewer.scene.screenSpaceCameraController.maximumZoomDistance =
       CAMERA.MAX_ZOOM_DISTANCE_WHEN_TRACKING;
@@ -269,6 +306,11 @@ export class OrbitSettings {
   /** 카메라가 위성에 고정 중인지 */
   isTracking(): boolean {
     return this.trackProxyEntity != null;
+  }
+
+  /** 시뮬레이션 루프가 실행 중인지 */
+  isSimulationRunning(): boolean {
+    return this.postRenderHandler !== null;
   }
 
   /**
@@ -404,7 +446,7 @@ export class OrbitSettings {
 
       if (startSimulation) {
         this.startSimulationLoop();
-        this.startTracking();
+        this.startTracking(true); // 현재 시점 유지하며 위성 추적 시작
       } else {
         const position = Cesium.Cartesian3.fromDegrees(
           result.longitude,
