@@ -95,7 +95,7 @@ export class AttitudeMiniMapViewer {
 
     const label = document.createElement('div');
     label.className = 'attitude-mini-map-label';
-    label.textContent = '자세';
+    label.textContent = 'Attitude';
     label.style.cssText = `
       position: absolute;
       top: 4px;

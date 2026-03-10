@@ -30,7 +30,7 @@ export function renderSatelliteSettingsForm(
 
   // 위치 입력 필드 (숨겨진 상태로 생성하여 기본값 사용)
   const lonInput = createInputField(
-    '경도 (도):',
+    'Longitude (deg):',
     'prototypeSatelliteLongitude',
     'number',
     '-180 ~ 180',
@@ -43,7 +43,7 @@ export function renderSatelliteSettingsForm(
   (lonInput as HTMLElement).style.display = 'none';
 
   const latInput = createInputField(
-    '위도 (도):',
+    'Latitude (deg):',
     'prototypeSatelliteLatitude',
     'number',
     '-90 ~ 90',
@@ -56,10 +56,10 @@ export function renderSatelliteSettingsForm(
   (latInput as HTMLElement).style.display = 'none';
 
   const altInput = createInputField(
-    '고도 (km):',
+    'Altitude (km):',
     'prototypeSatelliteAltitude',
     'number',
-    '0 이상',
+    '0 or above',
     '50000',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -74,7 +74,7 @@ export function renderSatelliteSettingsForm(
   form.appendChild(altInput);
 
   // 속도 방향 (방위각/고도각) - BUS 설정 위
-  const velocitySection = createSection('속도 방향');
+  const velocitySection = createSection('Velocity Direction');
   const velocitySectionTitle = velocitySection.querySelector('h4');
   if (velocitySectionTitle) {
     velocitySection.removeChild(velocitySectionTitle);
@@ -93,10 +93,10 @@ export function renderSatelliteSettingsForm(
   };
 
   const velocityAzimuthInput = createInputField(
-    '속도 방위각 (deg):',
+    'Velocity Azimuth (deg):',
     'prototypeVelocityAzimuth',
     'number',
-    '0=동쪽, 90=북쪽',
+    '0=East, 90=North',
     '0',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -110,10 +110,10 @@ export function renderSatelliteSettingsForm(
   velocitySection.appendChild(velocityAzimuthInput);
 
   const velocityElevationInput = createInputField(
-    '속도 고도각 (deg):',
+    'Velocity Elevation (deg):',
     'prototypeVelocityElevation',
     'number',
-    '0=수평',
+    '0=Horizontal',
     '0',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -129,7 +129,7 @@ export function renderSatelliteSettingsForm(
   form.appendChild(velocitySection);
 
   // BUS 설정 섹션
-  const busSection = createSection('BUS 설정');
+  const busSection = createSection('BUS Settings');
   // 타이틀 제거
   const busSectionTitle = busSection.querySelector('h4');
   if (busSectionTitle) {
@@ -141,10 +141,10 @@ export function renderSatelliteSettingsForm(
   busSection.style.marginTop = '15px';
   
   const busLengthInput = createInputField(
-    'BUS 길이 (mm):',
+    'BUS Length (mm):',
     'prototypeBusLength',
     'number',
-    '예: 800',
+    'e.g. 800',
     '800',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -153,10 +153,10 @@ export function renderSatelliteSettingsForm(
   busSection.appendChild(busLengthInput);
 
   const busWidthInput = createInputField(
-    'BUS 너비 (mm):',
+    'BUS Width (mm):',
     'prototypeBusWidth',
     'number',
-    '예: 700',
+    'e.g. 700',
     '700',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -165,10 +165,10 @@ export function renderSatelliteSettingsForm(
   busSection.appendChild(busWidthInput);
 
   const busHeightInput = createInputField(
-    'BUS 높이 (mm):',
+    'BUS Height (mm):',
     'prototypeBusHeight',
     'number',
-    '예: 840',
+    'e.g. 840',
     '840',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -177,10 +177,10 @@ export function renderSatelliteSettingsForm(
   busSection.appendChild(busHeightInput);
 
   const busRollInput = createInputField(
-    'BUS Roll (도):',
+    'BUS Roll (deg):',
     'prototypeBusRoll',
     'number',
-    'X축 회전',
+    'X-axis rotation',
     '45',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -189,10 +189,10 @@ export function renderSatelliteSettingsForm(
   busSection.appendChild(busRollInput);
 
   const busPitchInput = createInputField(
-    'BUS Pitch (도):',
+    'BUS Pitch (deg):',
     'prototypeBusPitch',
     'number',
-    'Y축 회전',
+    'Y-axis rotation',
     '0',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -201,10 +201,10 @@ export function renderSatelliteSettingsForm(
   busSection.appendChild(busPitchInput);
 
   const busYawInput = createInputField(
-    'BUS Yaw (도):',
+    'BUS Yaw (deg):',
     'prototypeBusYaw',
     'number',
-    'Z축 회전',
+    'Z-axis rotation',
     '0',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -215,16 +215,16 @@ export function renderSatelliteSettingsForm(
   form.appendChild(busSection);
 
   // 버스-안테나 간격 설정 섹션 (BUS 설정과 안테나 설정 사이)
-  const gapSection = createSection('버스-안테나 간격 설정');
+  const gapSection = createSection('Bus-Antenna Gap Settings');
   const gapSectionTitle = gapSection.querySelector('h4');
   if (gapSectionTitle) {
     gapSection.removeChild(gapSectionTitle);
   }
   const antennaGapInput = createInputField(
-    '버스-안테나 간격 (mm):',
+    'Bus-Antenna Gap (mm):',
     'prototypeAntennaGap',
     'number',
-    '예: 100',
+    'e.g. 100',
     '100',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -234,7 +234,7 @@ export function renderSatelliteSettingsForm(
   form.appendChild(gapSection);
 
   // 안테나 크기 설정 섹션
-  const antennaSizeSection = createSection('안테나 크기 설정');
+  const antennaSizeSection = createSection('Antenna Size Settings');
   // 타이틀 제거
   const antennaSizeSectionTitle = antennaSizeSection.querySelector('h4');
   if (antennaSizeSectionTitle) {
@@ -242,10 +242,10 @@ export function renderSatelliteSettingsForm(
   }
   
   const antennaHeightInput = createInputField(
-    '안테나 높이 (mm):',
+    'Antenna Height (mm):',
     'prototypeAntennaHeight',
     'number',
-    '예: 800',
+    'e.g. 800',
     '800',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -254,10 +254,10 @@ export function renderSatelliteSettingsForm(
   antennaSizeSection.appendChild(antennaHeightInput);
 
   const antennaWidthInput = createInputField(
-    '안테나 너비 (mm):',
+    'Antenna Width (mm):',
     'prototypeAntennaWidth',
     'number',
-    '예: 2410',
+    'e.g. 2410',
     '2410',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -266,10 +266,10 @@ export function renderSatelliteSettingsForm(
   antennaSizeSection.appendChild(antennaWidthInput);
 
   const antennaDepthInput = createInputField(
-    '안테나 두께 (mm):',
+    'Antenna Depth (mm):',
     'prototypeAntennaDepth',
     'number',
-    '예: 100',
+    'e.g. 100',
     '100',
     callbacks.onInputFocus,
     callbacks.onInputBlur,
@@ -279,78 +279,8 @@ export function renderSatelliteSettingsForm(
 
   form.appendChild(antennaSizeSection);
 
-  // 안테나 방향 파라미터 섹션
-  const antennaOrientationSection = createSection('안테나 방향 파라미터');
-  // 타이틀 제거
-  const antennaOrientationSectionTitle = antennaOrientationSection.querySelector('h4');
-  if (antennaOrientationSectionTitle) {
-    antennaOrientationSection.removeChild(antennaOrientationSectionTitle);
-  }
-  
-  const antennaRollInput = createInputField(
-    'Antenna Roll Angle (도):',
-    'prototypeAntennaRoll',
-    'number',
-    'x축 회전',
-    '0',
-    callbacks.onInputFocus,
-    callbacks.onInputBlur,
-    callbacks.onInputChange
-  );
-  antennaOrientationSection.appendChild(antennaRollInput);
-
-  const antennaPitchInput = createInputField(
-    'Antenna Pitch Angle (도):',
-    'prototypeAntennaPitch',
-    'number',
-    'y축 회전',
-    '0',
-    callbacks.onInputFocus,
-    callbacks.onInputBlur,
-    callbacks.onInputChange
-  );
-  antennaOrientationSection.appendChild(antennaPitchInput);
-
-  const antennaYawInput = createInputField(
-    'Antenna Yaw Angle (도):',
-    'prototypeAntennaYaw',
-    'number',
-    'z축 회전',
-    '0',
-    callbacks.onInputFocus,
-    callbacks.onInputBlur,
-    callbacks.onInputChange
-  );
-  antennaOrientationSection.appendChild(antennaYawInput);
-
-  const antennaElevationInput = createInputField(
-    'Initial Antenna Elevation Angle (도):',
-    'prototypeAntennaElevation',
-    'number',
-    '초기 Elevation',
-    '0',
-    callbacks.onInputFocus,
-    callbacks.onInputBlur,
-    callbacks.onInputChange
-  );
-  antennaOrientationSection.appendChild(antennaElevationInput);
-
-  const antennaAzimuthInput = createInputField(
-    'Initial Antenna Azimuth Angle (도):',
-    'prototypeAntennaAzimuth',
-    'number',
-    '초기 Azimuth',
-    '0',
-    callbacks.onInputFocus,
-    callbacks.onInputBlur,
-    callbacks.onInputChange
-  );
-  antennaOrientationSection.appendChild(antennaAzimuthInput);
-
-  form.appendChild(antennaOrientationSection);
-
   // 안테나 기타 파라미터 섹션 (데이터 저장용)
-  const antennaOtherSection = createSection('안테나 기타 파라미터 (데이터 저장용)');
+  const antennaOtherSection = createSection('Antenna Other Parameters (Data Storage)');
   // 타이틀 제거
   const antennaOtherSectionTitle = antennaOtherSection.querySelector('h4');
   if (antennaOtherSectionTitle) {
@@ -358,7 +288,7 @@ export function renderSatelliteSettingsForm(
   }
   
   const beamwidthElevationInput = createInputField(
-    'Beamwidth Elevation (도):',
+    'Beamwidth Elevation (deg):',
     'prototypeBeamwidthElevation',
     'number',
     '',
@@ -370,7 +300,7 @@ export function renderSatelliteSettingsForm(
   antennaOtherSection.appendChild(beamwidthElevationInput);
 
   const beamwidthAzimuthInput = createInputField(
-    'Beamwidth Azimuth (도):',
+    'Beamwidth Azimuth (deg):',
     'prototypeBeamwidthAzimuth',
     'number',
     '',
@@ -476,7 +406,7 @@ export function renderSatelliteSettingsForm(
 
   // 위성 엔티티 생성 버튼 (우주 공간에서 생성) - 숨김
   const createButton = document.createElement('button');
-  createButton.textContent = '위성 엔티티 생성 (우주 공간)';
+  createButton.textContent = 'Create Satellite Entity (Space)';
   createButton.style.padding = '10px';
   createButton.style.backgroundColor = '#4CAF50';
   createButton.style.color = 'white';
@@ -510,7 +440,7 @@ export function renderSatelliteSettingsForm(
   }
 
   const axisToggleText = document.createElement('span');
-  axisToggleText.textContent = 'XYZ 축 표시';
+  axisToggleText.textContent = 'Show XYZ Axis';
 
   axisToggleLabel.appendChild(axisToggle);
   axisToggleLabel.appendChild(axisToggleText);
@@ -518,10 +448,10 @@ export function renderSatelliteSettingsForm(
 
   // XYZ 축 길이 입력 필드
   const axisLengthInput = createInputField(
-    'XYZ 축 길이 (m):',
+    'XYZ Axis Length (m):',
     'prototypeAxisLength',
     'number',
-    '예: 0.2',
+    'e.g. 0.2',
     '0.2',
     undefined,
     undefined,

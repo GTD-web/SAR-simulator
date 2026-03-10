@@ -77,7 +77,7 @@ export function renderOrbitForm(
   const initialTimeLabel = document.createElement('label');
   initialTimeLabel.style.marginTop = '10px';
   initialTimeLabel.style.display = 'block';
-  initialTimeLabel.textContent = '초기 시각 (Initial Time):';
+  initialTimeLabel.textContent = 'Initial Time:';
   const initialTimeInput = document.createElement('input');
   initialTimeInput.type = 'datetime-local';
   initialTimeInput.id = ORBIT_FORM_IDS.INITIAL_TIME;
@@ -90,7 +90,7 @@ export function renderOrbitForm(
 
   createInputField(
     form,
-    'a - 긴반지름 (Semi-major Axis) (km):',
+    'a - Semi-major Axis (km):',
     ORBIT_FORM_IDS.SEMI_MAJOR_AXIS,
     String(RADARSAT_RCM.semiMajorAxis),
     '100',
@@ -100,7 +100,7 @@ export function renderOrbitForm(
 
   createInputField(
     form,
-    'e - 이심률 (Eccentricity):',
+    'e - Eccentricity:',
     ORBIT_FORM_IDS.ECCENTRICITY,
     String(RADARSAT_RCM.eccentricity),
     '0',
@@ -110,7 +110,7 @@ export function renderOrbitForm(
 
   createInputField(
     form,
-    'i - 궤도 경사각 (Inclination) (deg):',
+    'i - Inclination (deg):',
     ORBIT_FORM_IDS.INCLINATION,
     String(RADARSAT_RCM.inclination),
     '0',
@@ -120,7 +120,7 @@ export function renderOrbitForm(
 
   createInputField(
     form,
-    'Ω - 승교점 적경 (RAAN) (deg):',
+    'Ω - RAAN (deg):',
     ORBIT_FORM_IDS.RAAN,
     String(RADARSAT_RCM.raan),
     '0',
@@ -130,7 +130,7 @@ export function renderOrbitForm(
 
   createInputField(
     form,
-    'ω - 근지점 편각 (Argument of Perigee) (deg):',
+    'ω - Argument of Perigee (deg):',
     ORBIT_FORM_IDS.ARGUMENT_OF_PERIGEE,
     String(RADARSAT_RCM.argumentOfPerigee),
     '0',
@@ -142,7 +142,7 @@ export function renderOrbitForm(
   const anomalyTypeLabel = document.createElement('label');
   anomalyTypeLabel.style.marginTop = '10px';
   anomalyTypeLabel.style.display = 'block';
-  anomalyTypeLabel.textContent = '이각 타입 (Anomaly Type):';
+  anomalyTypeLabel.textContent = 'Anomaly Type:';
 
   const anomalyTypeSelect = document.createElement('select');
   anomalyTypeSelect.id = ORBIT_FORM_IDS.ANOMALY_TYPE;
@@ -152,12 +152,12 @@ export function renderOrbitForm(
 
   const trueAnomalyOption = document.createElement('option');
   trueAnomalyOption.value = 'true';
-  trueAnomalyOption.textContent = 'ν (진근점이각, True Anomaly)';
+  trueAnomalyOption.textContent = 'ν (True Anomaly)';
   anomalyTypeSelect.appendChild(trueAnomalyOption);
 
   const meanAnomalyOption = document.createElement('option');
   meanAnomalyOption.value = 'mean';
-  meanAnomalyOption.textContent = 'M (평균근점이각, Mean Anomaly)';
+  meanAnomalyOption.textContent = 'M (Mean Anomaly)';
   meanAnomalyOption.selected = true;
   anomalyTypeSelect.appendChild(meanAnomalyOption);
 
@@ -166,7 +166,7 @@ export function renderOrbitForm(
 
   createInputField(
     form,
-    'ν 또는 M - 이각 (True/Mean Anomaly) (deg):',
+    'ν or M - Anomaly (deg):',
     ORBIT_FORM_IDS.ANOMALY,
     String(RADARSAT_RCM.meanAnomaly ?? 0),
     '0',
@@ -182,7 +182,7 @@ export function renderOrbitForm(
   passDirectionLabel.style.background = 'rgba(0,0,0,0.2)';
   passDirectionLabel.style.borderRadius = '4px';
   passDirectionLabel.style.fontSize = '13px';
-  passDirectionLabel.textContent = '진행 방향: -';
+  passDirectionLabel.textContent = 'Pass Direction: -';
   form.appendChild(passDirectionLabel);
 
   // 궤도 적용 버튼
@@ -191,7 +191,7 @@ export function renderOrbitForm(
   applyButton.className = 'sidebar-section button';
   applyButton.style.width = '100%';
   applyButton.style.marginTop = '15px';
-  applyButton.textContent = '궤도 적용';
+  applyButton.textContent = 'Apply Orbit';
   applyButton.addEventListener('click', () => callbacks.onApply());
   form.appendChild(applyButton);
 

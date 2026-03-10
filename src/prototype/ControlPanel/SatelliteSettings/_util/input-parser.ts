@@ -151,7 +151,7 @@ export function parseAntennaGapInput(): number | null {
 }
 
 /**
- * 안테나 방향 파싱
+ * 안테나 방향 파싱 (UI 제거로 기본값 0 반환)
  */
 export function parseAntennaOrientationInputs(): {
   rollAngle: number;
@@ -159,36 +159,13 @@ export function parseAntennaOrientationInputs(): {
   yawAngle: number;
   initialElevationAngle: number;
   initialAzimuthAngle: number;
-} | null {
-  const antennaRollInput = (document.getElementById('prototypeAntennaRoll') as HTMLInputElement)?.value;
-  const antennaPitchInput = (document.getElementById('prototypeAntennaPitch') as HTMLInputElement)?.value;
-  const antennaYawInput = (document.getElementById('prototypeAntennaYaw') as HTMLInputElement)?.value;
-  const antennaElevationInput = (document.getElementById('prototypeAntennaElevation') as HTMLInputElement)?.value;
-  const antennaAzimuthInput = (document.getElementById('prototypeAntennaAzimuth') as HTMLInputElement)?.value;
-
-  if (antennaRollInput === undefined || antennaPitchInput === undefined || antennaYawInput === undefined ||
-      antennaElevationInput === undefined || antennaAzimuthInput === undefined) {
-    return null;
-  }
-
-  const antennaRoll = parseFloat(antennaRollInput || '0');
-  const antennaPitch = parseFloat(antennaPitchInput || '0');
-  const antennaYaw = parseFloat(antennaYawInput || '0');
-  const antennaElevation = parseFloat(antennaElevationInput || '0');
-  const antennaAzimuth = parseFloat(antennaAzimuthInput || '0');
-
-  // NaN 체크
-  if (isNaN(antennaRoll) || isNaN(antennaPitch) || isNaN(antennaYaw) ||
-      isNaN(antennaElevation) || isNaN(antennaAzimuth)) {
-    return null;
-  }
-
+} {
   return {
-    rollAngle: antennaRoll,
-    pitchAngle: antennaPitch,
-    yawAngle: antennaYaw,
-    initialElevationAngle: antennaElevation,
-    initialAzimuthAngle: antennaAzimuth
+    rollAngle: 0,
+    pitchAngle: 0,
+    yawAngle: 0,
+    initialElevationAngle: 0,
+    initialAzimuthAngle: 0
   };
 }
 

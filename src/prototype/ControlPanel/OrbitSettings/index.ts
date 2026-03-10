@@ -485,9 +485,9 @@ export class OrbitSettings {
     if (el) {
       const label =
         passDirection === 'ascending'
-          ? 'Ascending (남→북)'
-          : 'Descending (북→남)';
-      el.textContent = `진행 방향: ${label}`;
+          ? 'Ascending (S→N)'
+          : 'Descending (N→S)';
+      el.textContent = `Pass Direction: ${label}`;
     }
   }
 
