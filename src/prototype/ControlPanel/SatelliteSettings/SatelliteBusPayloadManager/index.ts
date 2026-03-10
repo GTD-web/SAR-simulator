@@ -324,7 +324,7 @@ export class SatelliteBusPayloadManager {
       this.viewer,
       this.antennaEntity,
       this.axisLength,
-      this.axisVisible,
+      false,
       this.getVelocityOptions(),
       () => this.currentCartesian,
       () => this.busOrientation ?? undefined
@@ -719,6 +719,13 @@ export class SatelliteBusPayloadManager {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * BUS 방향 (roll, pitch, yaw) 반환
+   */
+  getBusOrientation(): { rollAngle: number; pitchAngle: number; yawAngle: number } | null {
+    return this.busOrientation ?? null;
   }
 
   /**

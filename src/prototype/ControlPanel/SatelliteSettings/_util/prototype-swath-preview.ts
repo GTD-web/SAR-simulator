@@ -1,6 +1,7 @@
 import { SARSwathCalculator } from '../../../../poc/utils/sar-swath-calculator.js';
 import type { SwathCorners } from '../../../../poc/types/sar-swath.types.js';
 import type { SatelliteBusPayloadManager } from '../SatelliteBusPayloadManager/index.js';
+import { SwathMiniMapViewer } from './swath-mini-map-viewer.js';
 
 /** Y축 지표면 접촉점 기준 swath 간격 (m) */
 const SWATH_SPACING_M = 5000;
@@ -17,6 +18,8 @@ export class PrototypeSwathPreview {
   private beamDirectionLines: any[];
   /** 안테나 Y축 방향으로 지표면까지 일직선 */
   private antennaYAxisGroundLine: any;
+  /** 우측 상단 Swath 미니맵 */
+  private swathMiniMap: SwathMiniMapViewer | null;
 
   constructor(viewer: any, busPayloadManager: SatelliteBusPayloadManager | null) {
     this.viewer = viewer;
@@ -24,6 +27,7 @@ export class PrototypeSwathPreview {
     this.swathEntity = null;
     this.beamDirectionLines = [];
     this.antennaYAxisGroundLine = null;
+    this.swathMiniMap = null;
   }
 
   /**
@@ -86,6 +90,9 @@ export class PrototypeSwathPreview {
 
     this.createBeamDirectionLines();
     this.createAntennaYAxisGroundLine();
+
+    this.swathMiniMap = new SwathMiniMapViewer(this.viewer, this.busPayloadManager);
+    this.swathMiniMap.init();
   }
 
   /**
@@ -226,6 +233,11 @@ export class PrototypeSwathPreview {
       }
       this.swathEntity = null;
     }
+
+    if (this.swathMiniMap) {
+      this.swathMiniMap.clear();
+      this.swathMiniMap = null;
+    }
   }
 
   /**
@@ -233,5 +245,6 @@ export class PrototypeSwathPreview {
    */
   setBusPayloadManager(manager: SatelliteBusPayloadManager | null): void {
     this.busPayloadManager = manager;
+    this.swathMiniMap?.setBusPayloadManager(manager);
   }
 }

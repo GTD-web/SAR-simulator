@@ -130,11 +130,21 @@ export class OrbitSettings {
 
     if (result) {
       this.updatePassDirectionDisplay(result.passDirection);
-      const position = Cesium.Cartesian3.fromDegrees(
-        result.longitude,
-        result.latitude,
-        result.altitude
-      );
+      let position: Cesium.Cartesian3;
+      if (busEntity?.position) {
+        const pos = busEntity.position.getValue(Cesium.JulianDate.now());
+        position = pos ?? Cesium.Cartesian3.fromDegrees(
+          result.longitude,
+          result.latitude,
+          result.altitude
+        );
+      } else {
+        position = Cesium.Cartesian3.fromDegrees(
+          result.longitude,
+          result.latitude,
+          result.altitude
+        );
+      }
       this.stopTracking();
       this.viewer.camera.lookAt(
         position,
