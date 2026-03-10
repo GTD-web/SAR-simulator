@@ -327,14 +327,7 @@ export class SatelliteBusPayloadManager {
       this.axisVisible,
       this.getVelocityOptions(),
       () => this.currentCartesian,
-      () => this.busOrientation ?? undefined,
-      () => this.antennaParams
-        ? {
-            rollAngle: this.antennaParams.rollAngle,
-            pitchAngle: this.antennaParams.pitchAngle,
-            yawAngle: this.antennaParams.yawAngle,
-          }
-        : undefined
+      () => this.busOrientation ?? undefined
     );
   }
 
@@ -723,6 +716,46 @@ export class SatelliteBusPayloadManager {
     if (!this.antennaEntity?.position) return null;
     try {
       return this.antennaEntity.position.getValue(Cesium.JulianDate.now());
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * BUS Y축 방향 (정규화된 ECEF 단위 벡터) 반환. 안테나 축이 BUS와 동일하므로 Y축 지표면 직선 등에 사용
+   */
+  getBusYAxisDirection(): any {
+    if (!this.currentCartesian) return null;
+    const baseAxes = calculateBaseAxes(this.currentCartesian, this.getVelocityOptions());
+    if (!baseAxes) return null;
+    const bo = this.busOrientation ?? { rollAngle: 0, pitchAngle: 0, yawAngle: 0 };
+    const axes = applyBusRollPitchYawToAxes(baseAxes, bo.rollAngle, bo.pitchAngle, bo.yawAngle);
+    return Cesium.Cartesian3.normalize(axes.yAxis, new Cesium.Cartesian3());
+  }
+
+  /**
+   * Y축이 지표면(WGS84)과 만나는 점 반환. 없으면 null
+   */
+  getYAxisGroundPoint(): { longitude: number; latitude: number; cartesian: any } | null {
+    const antennaCartesian = this.getAntennaCartesian();
+    const direction = this.getBusYAxisDirection();
+    if (!antennaCartesian || !direction) return null;
+
+    try {
+      const cesiumAny = Cesium as any;
+      const ray = new cesiumAny.Ray(antennaCartesian, direction);
+      const intersection = cesiumAny.IntersectionTests?.rayEllipsoid?.(ray, Cesium.Ellipsoid.WGS84);
+      if (!intersection) return null;
+
+      const groundCartesian = cesiumAny.Ray?.getPoint?.(ray, intersection.start, new Cesium.Cartesian3());
+      if (!groundCartesian) return null;
+
+      const cartographic = Cesium.Cartographic.fromCartesian(groundCartesian);
+      return {
+        longitude: Cesium.Math.toDegrees(cartographic.longitude),
+        latitude: Cesium.Math.toDegrees(cartographic.latitude),
+        cartesian: groundCartesian,
+      };
     } catch {
       return null;
     }

@@ -2,13 +2,8 @@ import { SARSwathCalculator } from '../../../../poc/utils/sar-swath-calculator.j
 import type { SwathCorners } from '../../../../poc/types/sar-swath.types.js';
 import type { SatelliteBusPayloadManager } from '../SatelliteBusPayloadManager/index.js';
 
-/** POC 기본값과 동일 */
-const DEFAULT_SWATH_PARAMS = {
-  nearRange: 200000,
-  farRange: 800000,
-  swathWidth: 400000,
-  azimuthLength: 50000,
-};
+/** Y축 지표면 접촉점 기준 swath 간격 (m) */
+const SWATH_SPACING_M = 5000;
 
 const CORNER_KEYS: Array<keyof SwathCorners> = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'];
 
@@ -20,12 +15,15 @@ export class PrototypeSwathPreview {
   private busPayloadManager: SatelliteBusPayloadManager | null;
   private swathEntity: any;
   private beamDirectionLines: any[];
+  /** 안테나 Y축 방향으로 지표면까지 일직선 */
+  private antennaYAxisGroundLine: any;
 
   constructor(viewer: any, busPayloadManager: SatelliteBusPayloadManager | null) {
     this.viewer = viewer;
     this.busPayloadManager = busPayloadManager;
     this.swathEntity = null;
     this.beamDirectionLines = [];
+    this.antennaYAxisGroundLine = null;
   }
 
   /**
@@ -44,24 +42,26 @@ export class PrototypeSwathPreview {
     this.swathEntity = this.viewer.entities.add({
       name: 'PrototypeSwathPreview',
       show: new Cesium.CallbackProperty(
-        () => !!this.busPayloadManager?.getPositionForSwath?.(),
+        () => !!this.busPayloadManager?.getPositionForSwath?.() && !!this.busPayloadManager?.getYAxisGroundPoint?.(),
         false
       ),
       polygon: {
         hierarchy: new Cesium.CallbackProperty(() => {
+          const groundPoint = this.busPayloadManager?.getYAxisGroundPoint?.();
           const pos = this.busPayloadManager?.getPositionForSwath?.();
-          if (!pos) {
+          if (!groundPoint || !pos) {
             return new Cesium.PolygonHierarchy(defaultPositions);
           }
 
+          const halfSpacing = SWATH_SPACING_M / 2;
           const geometry = {
-            centerLat: pos.latitude,
-            centerLon: pos.longitude,
+            centerLat: groundPoint.latitude,
+            centerLon: groundPoint.longitude,
             heading: pos.heading,
-            nearRange: DEFAULT_SWATH_PARAMS.nearRange,
-            farRange: DEFAULT_SWATH_PARAMS.farRange,
-            swathWidth: DEFAULT_SWATH_PARAMS.swathWidth,
-            azimuthLength: DEFAULT_SWATH_PARAMS.azimuthLength,
+            nearRange: -halfSpacing,
+            farRange: halfSpacing,
+            swathWidth: SWATH_SPACING_M,
+            azimuthLength: SWATH_SPACING_M,
             satelliteAltitude: pos.altitude,
           };
 
@@ -85,6 +85,58 @@ export class PrototypeSwathPreview {
     });
 
     this.createBeamDirectionLines();
+    this.createAntennaYAxisGroundLine();
+  }
+
+  /**
+   * 안테나 엔티티 현재 Y축 방향으로 지표면까지 일직선 생성
+   */
+  private createAntennaYAxisGroundLine(): void {
+    if (!this.viewer || !this.busPayloadManager) return;
+
+    this.antennaYAxisGroundLine = this.viewer.entities.add({
+      name: 'PrototypeAntennaYAxisGroundLine',
+      show: new Cesium.CallbackProperty(
+        () => !!this.busPayloadManager?.getPositionForSwath?.(),
+        false
+      ),
+      polyline: {
+        positions: new Cesium.CallbackProperty(() => {
+          const antennaCartesian = this.busPayloadManager?.getAntennaCartesian?.();
+          const direction = this.busPayloadManager?.getBusYAxisDirection?.();
+          if (!antennaCartesian || !direction) return [];
+
+          try {
+
+            const cesiumAny = Cesium as any;
+            const ray = new cesiumAny.Ray(antennaCartesian, direction);
+            const intersection = cesiumAny.IntersectionTests?.rayEllipsoid?.(
+              ray,
+              Cesium.Ellipsoid.WGS84
+            );
+
+            let endPoint: any;
+            if (intersection) {
+              endPoint = cesiumAny.Ray?.getPoint?.(ray, intersection.start, new Cesium.Cartesian3());
+            } else {
+              const extendDistance = 1e6;
+              endPoint = Cesium.Cartesian3.add(
+                antennaCartesian,
+                Cesium.Cartesian3.multiplyByScalar(direction, extendDistance, new Cesium.Cartesian3()),
+                new Cesium.Cartesian3()
+              );
+            }
+            return [antennaCartesian, endPoint];
+          } catch {
+            return [];
+          }
+        }, false),
+        width: 2,
+        material: Cesium.Color.CYAN.withAlpha(0.9),
+        clampToGround: false,
+        arcType: Cesium.ArcType.NONE,
+      },
+    });
   }
 
   /**
@@ -97,14 +149,15 @@ export class PrototypeSwathPreview {
       const lineEntity = this.viewer.entities.add({
         name: `PrototypeBeamDirectionLine_${index}`,
         show: new Cesium.CallbackProperty(
-          () => !!this.busPayloadManager?.getPositionForSwath?.(),
+          () => !!this.busPayloadManager?.getPositionForSwath?.() && !!this.busPayloadManager?.getYAxisGroundPoint?.(),
           false
         ),
         polyline: {
           positions: new Cesium.CallbackProperty(() => {
             const antennaCartesian = this.busPayloadManager?.getAntennaCartesian?.();
+            const groundPoint = this.busPayloadManager?.getYAxisGroundPoint?.();
             const pos = this.busPayloadManager?.getPositionForSwath?.();
-            if (!pos) return [];
+            if (!groundPoint || !pos) return [];
 
             const originCartesian = antennaCartesian ?? Cesium.Cartesian3.fromDegrees(
               pos.longitude,
@@ -112,14 +165,15 @@ export class PrototypeSwathPreview {
               pos.altitude
             );
 
+            const halfSpacing = SWATH_SPACING_M / 2;
             const geometry = {
-              centerLat: pos.latitude,
-              centerLon: pos.longitude,
+              centerLat: groundPoint.latitude,
+              centerLon: groundPoint.longitude,
               heading: pos.heading,
-              nearRange: DEFAULT_SWATH_PARAMS.nearRange,
-              farRange: DEFAULT_SWATH_PARAMS.farRange,
-              swathWidth: DEFAULT_SWATH_PARAMS.swathWidth,
-              azimuthLength: DEFAULT_SWATH_PARAMS.azimuthLength,
+              nearRange: -halfSpacing,
+              farRange: halfSpacing,
+              swathWidth: SWATH_SPACING_M,
+              azimuthLength: SWATH_SPACING_M,
               satelliteAltitude: pos.altitude,
             };
 
@@ -154,6 +208,15 @@ export class PrototypeSwathPreview {
       }
     });
     this.beamDirectionLines = [];
+
+    if (this.antennaYAxisGroundLine && this.viewer) {
+      try {
+        this.viewer.entities.remove(this.antennaYAxisGroundLine);
+      } catch {
+        // 무시
+      }
+      this.antennaYAxisGroundLine = null;
+    }
 
     if (this.swathEntity && this.viewer) {
       try {

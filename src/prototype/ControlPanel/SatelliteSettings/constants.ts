@@ -132,6 +132,8 @@ export const CAMERA = {
   RANGE_MULTIPLIER_HORIZONTAL: 3,
   /** 위성 추적 시 최대 줌 아웃 거리 (미터) - 멀리 가지 못하게 제한 */
   MAX_ZOOM_DISTANCE_WHEN_TRACKING: 20_000_000,
+  /** 궤도 설정 탭·위성 고정 시 카메라 거리 (미터) */
+  ORBIT_TAB_ZOOM_RANGE: 1_000,
 } as const;
 
 // 위치 검증 범위

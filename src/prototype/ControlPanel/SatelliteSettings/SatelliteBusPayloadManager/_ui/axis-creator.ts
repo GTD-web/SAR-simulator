@@ -154,11 +154,10 @@ export function createAxisEntities(
 export type BusOrientation = { rollAngle: number; pitchAngle: number; yawAngle: number };
 
 /**
- * 안테나 XYZ 축 엔티티 생성 (안테나 위치에서 시작, BUS+안테나 방향 반영)
+ * 안테나 XYZ 축 엔티티 생성 (안테나 위치에서 시작, BUS와 동일한 축 방향)
  * @param velocityOptions 속도 방향(방위각/고도각 또는 ECEF). 없으면 기존 동작
  * @param getBusCartesian 버스 위치 getter. 주어지면 이 위치에서 축 방향 계산 (시뮬레이션 시 최신값 참조)
  * @param getBusOrientation BUS 방향 getter
- * @param getAntennaOrientation 안테나 방향 getter (BUS 축 기준)
  */
 export function createAntennaAxisEntities(
   viewer: any,
@@ -167,8 +166,7 @@ export function createAntennaAxisEntities(
   axisVisible: boolean,
   velocityOptions?: VelocityDirectionOptions,
   getBusCartesian?: () => any,
-  getBusOrientation?: () => BusOrientation | undefined,
-  getAntennaOrientation?: () => BusOrientation | undefined
+  getBusOrientation?: () => BusOrientation | undefined
 ): {
   xAxis: any;
   yAxis: any;
@@ -186,11 +184,7 @@ export function createAntennaAxisEntities(
     const baseAxes = calculateBaseAxes(busCart || center, velocityOptions);
     if (!baseAxes) return { center, axes: null };
     const busOri = getBusOrientation?.() ?? { rollAngle: 0, pitchAngle: 0, yawAngle: 0 };
-    let axes = applyBusRollPitchYawToAxes(baseAxes, busOri.rollAngle, busOri.pitchAngle, busOri.yawAngle);
-    const antOri = getAntennaOrientation?.();
-    if (antOri) {
-      axes = applyBusRollPitchYawToAxes(axes, antOri.rollAngle, antOri.pitchAngle, antOri.yawAngle);
-    }
+    const axes = applyBusRollPitchYawToAxes(baseAxes, busOri.rollAngle, busOri.pitchAngle, busOri.yawAngle);
     return { center, axes };
   };
 

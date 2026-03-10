@@ -5,19 +5,26 @@ import { renderSatelliteSettingsForm, FormRendererCallbacks } from './_ui/form-r
 import { updateEntity } from './_util/entity-updater.js';
 import { createSatelliteEntity } from './_util/entity-creator.js';
 import { getDirectionForInputId } from './_util/direction-mapper.js';
-import { parseBusOrientationInputs } from './_util/input-parser.js';
+import {
+  parseBusOrientationInputs,
+  parseBusDimensionsInputs,
+  parseAntennaDimensionsInputs,
+  parseAntennaGapInput,
+  parseAntennaOrientationInputs,
+  parseSatelliteBasicInfo,
+} from './_util/input-parser.js';
 import { waitForCameraReady, setupCameraAngle, setupCanvasFocus } from './_util/camera-manager.js';
-import { 
-  TIMER, 
-  DEFAULT_POSITION, 
-  DEFAULT_BUS_DIMENSIONS_M, 
+import {
+  TIMER,
+  DEFAULT_POSITION,
+  DEFAULT_BUS_DIMENSIONS_M,
   DEFAULT_BUS_DIMENSIONS_MM,
   DEFAULT_BUS_ORIENTATION,
-  DEFAULT_ANTENNA_DIMENSIONS_M, 
-  DEFAULT_ANTENNA_GAP_M, 
+  DEFAULT_ANTENNA_DIMENSIONS_M,
+  DEFAULT_ANTENNA_GAP_M,
   DEFAULT_ANTENNA_ORIENTATION,
   DEFAULT_SATELLITE_INFO,
-  POSITION_VALIDATION
+  POSITION_VALIDATION,
 } from './constants.js';
 import { setCameraToEntityHorizontal } from './_util/camera-manager.js';
 
@@ -75,7 +82,7 @@ export class SatelliteSettings {
   }
 
   /**
-   * 초기 엔티티 생성 - 궤도 6요소로 계산된 궤도 위 위치에 위성 배치
+   * 초기 엔티티 생성 - 위성 설정·궤도 설정 폼 값에 따라 궤도 위에 위성 배치
    * @param flyAfterCreate true면 생성 후 궤도로 카메라 이동 (flyToSatelliteEntity 등에서 사용)
    */
   private createInitialEntityOnOrbit(flyAfterCreate = false): void {
@@ -96,30 +103,48 @@ export class SatelliteSettings {
     }
 
     try {
+      // 위성 설정 폼 값 사용 (폼 없거나 파싱 실패 시 기본값)
+      const { name } = parseSatelliteBasicInfo();
+      const busDimensions = parseBusDimensionsInputs() ?? {
+        length: DEFAULT_BUS_DIMENSIONS_M.LENGTH,
+        width: DEFAULT_BUS_DIMENSIONS_M.WIDTH,
+        height: DEFAULT_BUS_DIMENSIONS_M.HEIGHT,
+      };
+      const antennaDimensions = parseAntennaDimensionsInputs() ?? {
+        height: DEFAULT_ANTENNA_DIMENSIONS_M.HEIGHT,
+        width: DEFAULT_ANTENNA_DIMENSIONS_M.WIDTH,
+        depth: DEFAULT_ANTENNA_DIMENSIONS_M.DEPTH,
+      };
+      const antennaOrientation = parseAntennaOrientationInputs() ?? {
+        rollAngle: DEFAULT_ANTENNA_ORIENTATION.ROLL,
+        pitchAngle: DEFAULT_ANTENNA_ORIENTATION.PITCH,
+        yawAngle: DEFAULT_ANTENNA_ORIENTATION.YAW,
+        initialElevationAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_ELEVATION,
+        initialAzimuthAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_AZIMUTH,
+      };
+      const antennaGap = parseAntennaGapInput() ?? DEFAULT_ANTENNA_GAP_M;
+      const busOrientation = parseBusOrientationInputs() ?? DEFAULT_BUS_ORIENTATION;
+
       this.busPayloadManager.createSatellite(
-        DEFAULT_SATELLITE_INFO.NAME,
+        name,
         {
           longitude: result.longitude,
           latitude: result.latitude,
           altitude: result.altitude,
         },
+        busDimensions,
         {
-          length: DEFAULT_BUS_DIMENSIONS_M.LENGTH,
-          width: DEFAULT_BUS_DIMENSIONS_M.WIDTH,
-          height: DEFAULT_BUS_DIMENSIONS_M.HEIGHT,
+          height: antennaDimensions.height,
+          width: antennaDimensions.width,
+          depth: antennaDimensions.depth,
+          rollAngle: antennaOrientation.rollAngle,
+          pitchAngle: antennaOrientation.pitchAngle,
+          yawAngle: antennaOrientation.yawAngle,
+          initialElevationAngle: antennaOrientation.initialElevationAngle,
+          initialAzimuthAngle: antennaOrientation.initialAzimuthAngle,
         },
-        {
-          height: DEFAULT_ANTENNA_DIMENSIONS_M.HEIGHT,
-          width: DEFAULT_ANTENNA_DIMENSIONS_M.WIDTH,
-          depth: DEFAULT_ANTENNA_DIMENSIONS_M.DEPTH,
-          rollAngle: DEFAULT_ANTENNA_ORIENTATION.ROLL,
-          pitchAngle: DEFAULT_ANTENNA_ORIENTATION.PITCH,
-          yawAngle: DEFAULT_ANTENNA_ORIENTATION.YAW,
-          initialElevationAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_ELEVATION,
-          initialAzimuthAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_AZIMUTH,
-        },
-        DEFAULT_ANTENNA_GAP_M,
-        DEFAULT_BUS_ORIENTATION
+        antennaGap,
+        busOrientation
       );
 
       this.busPayloadManager.setVelocityDirectionEcef(
@@ -127,6 +152,9 @@ export class SatelliteSettings {
         result.velocityEcef.y,
         result.velocityEcef.z
       );
+
+      // 궤도 설정에 따라 TLE 궤도 그리기 (초기 접근 시 30분 궤도선만, 시뮬레이션 미시작)
+      this.orbitSettingsRef?.applyOrbitToSatellite(false, false);
 
       if (flyAfterCreate) {
         this.flyToOrbitAfterEntityRendered();

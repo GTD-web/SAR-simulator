@@ -17,14 +17,8 @@ const RADARSAT_RCM: OrbitalElements = {
 };
 
 export interface OrbitFormRendererCallbacks {
-  /** 폼 change 시 호출 (디바운스 적용은 호출 측에서) */
-  onOrbitChange: () => void;
-  /** 궤도 적용 버튼 클릭 시 호출 */
+  /** 궤도 적용 버튼 클릭 시 호출 (폼 change는 무한 업데이트 방지를 위해 사용하지 않음) */
   onApply: () => void;
-  /** 탭 활성 여부 (change 시 업데이트 스킵용) */
-  isActive: () => boolean;
-  /** 업데이트 억제 종료 시각 (ms) */
-  getIgnoreUpdatesUntil: () => number;
 }
 
 /**
@@ -179,12 +173,6 @@ export function renderOrbitForm(
     '360',
     '0.1'
   );
-
-  form.addEventListener('change', () => {
-    if (!callbacks.isActive()) return;
-    if (Date.now() < callbacks.getIgnoreUpdatesUntil()) return;
-    callbacks.onOrbitChange();
-  });
 
   // 진행 방향 표시
   const passDirectionLabel = document.createElement('div');

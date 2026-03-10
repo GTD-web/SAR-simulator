@@ -170,7 +170,7 @@ export class ControlPanelManager {
           this.orbitSettings?.flyToOrbitPosition();
         }
 
-        // 궤도 설정 탭 클릭 시 엔티티 위치로 카메라 이동 + 위성 추적 고정
+        // 궤도 설정 탭 클릭 시 엔티티 위치로 카메라 이동
         if (targetTab === 'orbit' && this.viewer) {
           if (this.satelliteSettings) {
             this.satelliteSettings.cancelCameraAnimation();
