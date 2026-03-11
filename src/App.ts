@@ -33,19 +33,8 @@ export class App {
 
       this.currentPage = new PrototypePage();
       await this.currentPage.initialize();
-      this.hideCameraTrackButton();
     } catch (error) {
       console.error('[App] Prototype 페이지 로드 오류:', error);
-    }
-  }
-
-  /**
-   * 카메라 고정 버튼 숨김
-   */
-  private hideCameraTrackButton(): void {
-    const button = document.getElementById('cameraTrackButton');
-    if (button) {
-      button.style.display = 'none';
     }
   }
 }

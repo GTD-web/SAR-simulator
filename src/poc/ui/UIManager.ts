@@ -71,48 +71,8 @@ export class UIManager {
     // 위성 방향 제어 UI 초기화
     this.satelliteOrientationUIManager.initialize();
     
-    // 카메라 추적 버튼 초기화
-    this.initializeCameraTrackingButton();
-    
     // 지도 클릭 이벤트 설정
     this.setupMapClickHandler();
-  }
-
-  /**
-   * 카메라 추적 버튼 초기화
-   */
-  private initializeCameraTrackingButton(): void {
-    const button = document.getElementById('cameraTrackButton');
-    if (!button) {
-      return;
-    }
-
-    button.addEventListener('click', () => {
-      if (!this.viewerManager) {
-        console.warn('[UIManager] ViewerManager가 없어 카메라 추적을 사용할 수 없습니다.');
-        return;
-      }
-
-      const isTracking = this.viewerManager.isTracking();
-      const satelliteEntity = this.entityManager.getEntity();
-
-      if (!satelliteEntity) {
-        console.warn('[UIManager] 위성 엔티티가 없어 카메라 추적을 사용할 수 없습니다.');
-        return;
-      }
-
-      if (isTracking) {
-        // 추적 해제
-        this.viewerManager.untrackEntity();
-        button.textContent = '카메라 고정';
-        button.classList.remove('active');
-      } else {
-        // 추적 시작
-        this.viewerManager.trackEntity(satelliteEntity);
-        button.textContent = '추적 중';
-        button.classList.add('active');
-      }
-    });
   }
 
   /**
