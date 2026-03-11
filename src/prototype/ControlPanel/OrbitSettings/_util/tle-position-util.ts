@@ -89,10 +89,10 @@ export function getPositionFromTLE(
 }
 
 /**
- * TLE로부터 궤도 경로 위치 배열 계산
+ * satrec로 궤도 경로 위치 배열 계산 (파싱 생략, 고빈도 호출용)
  */
-export function getOrbitPathPositionsFromTLE(
-  tleText: string,
+export function getOrbitPathPositionsFromSatrec(
+  satrec: Satrec,
   centerTime: Cesium.JulianDate,
   durationHours: number,
   sampleIntervalMinutes: number
@@ -113,7 +113,7 @@ export function getOrbitPathPositionsFromTLE(
       i * sampleIntervalSeconds,
       new Cesium.JulianDate()
     );
-    const pos = getPositionFromTLE(tleText, sampleTime);
+    const pos = getPositionFromSatrec(satrec, sampleTime);
     if (pos) {
       positions.push(
         Cesium.Cartesian3.fromDegrees(pos.longitude, pos.latitude, pos.altitude)
@@ -121,4 +121,18 @@ export function getOrbitPathPositionsFromTLE(
     }
   }
   return positions;
+}
+
+/**
+ * TLE로부터 궤도 경로 위치 배열 계산
+ */
+export function getOrbitPathPositionsFromTLE(
+  tleText: string,
+  centerTime: Cesium.JulianDate,
+  durationHours: number,
+  sampleIntervalMinutes: number
+): Cesium.Cartesian3[] {
+  const satrec = parseTleToSatrec(tleText);
+  if (!satrec) return [];
+  return getOrbitPathPositionsFromSatrec(satrec, centerTime, durationHours, sampleIntervalMinutes);
 }
