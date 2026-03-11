@@ -20,6 +20,7 @@ export class ControlPanelManager {
   private viewer: any;
   private regionInfoPanel: HTMLElement | null;
   private flyToSatelliteButton: HTMLButtonElement | null;
+  private flyToSatelliteCooldownUntil = 0;
 
   constructor() {
     this.sidebar = null;
@@ -247,8 +248,13 @@ export class ControlPanelManager {
   /**
    * 위성으로 카메라 이동 + 추적 (버튼 클릭 시 호출)
    * 시뮬레이션 유지, 카메라가 위성 움직임에 따라 추적
+   * 연속 클릭 방지: 1.5초 쿨다운
    */
   private flyToSatellite(): void {
+    const now = Date.now();
+    if (now < this.flyToSatelliteCooldownUntil) return;
+    this.flyToSatelliteCooldownUntil = now + 1500;
+
     if (!this.viewer) return;
     if (this.satelliteSettings) {
       this.satelliteSettings.cancelCameraAnimation();

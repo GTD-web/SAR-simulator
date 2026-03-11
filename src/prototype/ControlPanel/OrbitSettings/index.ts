@@ -11,7 +11,12 @@ import {
 } from '../SatelliteSettings/_util/camera-manager.js';
 import { calculateCameraRange } from '../SatelliteSettings/_util/entity-creator.js';
 import { CAMERA } from '../SatelliteSettings/constants.js';
-import { getPositionFromTLE } from './_util/tle-position-util.js';
+import {
+  getPositionFromTLE,
+  getPositionFromSatrec,
+  parseTleToSatrec,
+  type Satrec,
+} from './_util/tle-position-util.js';
 import {
   getElementsAndEpochTimeFromForm,
   type ParsedOrbitForm,
@@ -69,6 +74,8 @@ export class OrbitSettings {
   private busPayloadManager: import('../SatelliteSettings/SatelliteBusPayloadManager/index.js').SatelliteBusPayloadManager | null;
   /** 궤도 6요소에서 생성한 TLE (시뮬레이션용) */
   private currentTLE: string | null;
+  /** TLE 파싱 결과 캐시 (매 프레임 파싱 방지) */
+  private cachedSatrec: Satrec | null;
   /** 시뮬레이션 활성화 여부 (시간 기반 궤도 전파) */
   private simulationEnabled: boolean;
   /** postRender 핸들러 (시뮬레이션 시 시간 기반 위치 업데이트) */
@@ -78,6 +85,10 @@ export class OrbitSettings {
   private orbitChangeDebounceTimer: number | null;
   /** 마지막 적용한 위성 위치 (떨림 방지용 최소 이동량 체크) */
   private lastAppliedPos: { longitude: number; latitude: number; altitude: number } | null;
+  /** preRender 스로틀: 마지막 처리 시각 ms (클럭 정지 시 불필요 업데이트 방지) */
+  private lastProcessedTimeMs: number | null;
+  /** preRender 스로틀: 프레임 카운터 (매 2프레임마다 업데이트) */
+  private orbitUpdateFrameCount: number;
   /** 더블클릭 핸들러 제거 함수 (cleanup용) */
   private doubleClickRemove: (() => void) | null;
 
@@ -86,11 +97,14 @@ export class OrbitSettings {
     this.viewer = null;
     this.busPayloadManager = null;
     this.currentTLE = null;
+    this.cachedSatrec = null;
     this.simulationEnabled = true;
     this.postRenderHandler = null;
     this.orbitPathManager = null;
     this.orbitChangeDebounceTimer = null;
     this.lastAppliedPos = null;
+    this.lastProcessedTimeMs = null;
+    this.orbitUpdateFrameCount = 0;
     this.doubleClickRemove = null;
   }
 
@@ -473,23 +487,20 @@ export class OrbitSettings {
   /**
    * 위성으로 카메라 이동 + 추적 (시뮬레이션 유지, 카메라가 위성 움직임 추적)
    */
+  /**
+   * Fly to Satellite 버튼: 현재 위성 위치로 카메라 이동 후 위성 추적
+   */
   zoomToSatelliteAndTrack(): void {
     const busEntity = this.busPayloadManager?.getBusEntity();
     if (!busEntity || !this.viewer) return;
 
-    const pos = busEntity.position?.getValue?.(this.viewer.clock.currentTime);
-    if (!pos) return;
-
-    setCameraAtPosition(
-      this.viewer.camera,
-      pos,
-      CAMERA.HEADING_DEGREES,
-      CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES,
-      CAMERA.FLY_TO_SATELLITE_RANGE
+    zoomToEntityAndTrack(
+      this.viewer,
+      busEntity,
+      CAMERA.FLY_TO_SATELLITE_RANGE,
+      1,
+      true
     );
-    this.viewer.trackedEntity = busEntity;
-    this.viewer.scene.screenSpaceCameraController.maximumZoomDistance =
-      CAMERA.MAX_ZOOM_DISTANCE_WHEN_TRACKING;
   }
 
   /** 시뮬레이션(clock 재생)이 실행 중인지 */
@@ -514,10 +525,21 @@ export class OrbitSettings {
 
     /** 최소 이동량 (m) - 이보다 작은 변화는 무시하여 떨림 감소 (궤도 속도 ~7.5km/s이므로 0.5m로 부동소수점 노이즈만 필터) */
     const MIN_MOVE_M = 0.5;
+    /** 스로틀: 클럭 정지 시 시각 변경 없으면 스킵, 재생 시 2프레임마다 업데이트 (멈춤 방지) */
     this.postRenderHandler = () => {
-      if (!this.currentTLE || !this.busPayloadManager?.getBusEntity()) return;
+      const satrec = this.cachedSatrec;
+      if (!satrec || !this.busPayloadManager?.getBusEntity()) return;
       const currentTime = this.viewer.clock.currentTime;
-      const pos = getPositionFromTLE(this.currentTLE, currentTime);
+      const isAnimating = this.viewer.clock.shouldAnimate;
+      if (!isAnimating) {
+        const currentMs = Cesium.JulianDate.toDate(currentTime).getTime();
+        if (this.lastProcessedTimeMs !== null && this.lastProcessedTimeMs === currentMs) return;
+        this.lastProcessedTimeMs = currentMs;
+      } else {
+        this.orbitUpdateFrameCount++;
+        if (this.orbitUpdateFrameCount % 2 !== 0) return;
+      }
+      const pos = getPositionFromSatrec(satrec, currentTime);
       if (pos) {
         const newCart = Cesium.Cartesian3.fromDegrees(
           pos.longitude,
@@ -573,7 +595,9 @@ export class OrbitSettings {
       this.viewer.clock.shouldAnimate = true;
     }
 
-    this.lastAppliedPos = null; // 초기 위치 강제 적용
+    this.lastAppliedPos = null;
+    this.lastProcessedTimeMs = null;
+    this.orbitUpdateFrameCount = 0;
     const currentTime = this.viewer.clock.currentTime;
     const pos = getPositionFromTLE(this.currentTLE!, currentTime);
     if (pos) {
@@ -647,6 +671,7 @@ export class OrbitSettings {
         return;
       }
       this.currentTLE = tle;
+      this.cachedSatrec = parseTleToSatrec(tle);
 
       const result = getPositionFromTLE(tle, epochTime);
       if (!result) {
@@ -747,6 +772,7 @@ export class OrbitSettings {
     this.doubleClickRemove?.();
     this.stopSimulationLoop();
     this.removeOrbitPostRender();
+    this.cachedSatrec = null;
     this.stopCameraTracking();
     this.orbitPathManager?.clear();
     this.orbitPathManager = null;

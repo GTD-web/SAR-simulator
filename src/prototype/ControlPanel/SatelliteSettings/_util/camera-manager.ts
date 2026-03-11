@@ -194,6 +194,9 @@ export function zoomToEntityAndTrack(
   setTrackedEntity = true
 ): void {
   if (!viewer || !entity) return;
+  if (viewer.camera._flight && viewer.camera._flight.isActive()) {
+    viewer.camera.cancelFlight();
+  }
   const range = cameraRange ?? calculateCameraRange();
   const pitch = cameraRange != null ? CAMERA.ORBIT_TRACK_PITCH_DEGREES : CAMERA.PITCH_DEGREES;
   const offset = new Cesium.HeadingPitchRange(

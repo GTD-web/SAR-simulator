@@ -10,20 +10,35 @@ export interface TlePositionResult {
   passDirection: 'ascending' | 'descending';
 }
 
+/** satellite.js satrec 타입 (캐싱용) */
+export type Satrec = Record<string, unknown>;
+
 /**
- * TLE로부터 특정 시각의 위치·속도 계산 (satellite.js SGP4)
+ * TLE 문자열을 satrec로 파싱 (캐싱용, 매 프레임 파싱 방지)
  */
-export function getPositionFromTLE(
-  tleText: string,
-  time: Cesium.JulianDate
-): TlePositionResult | null {
+export function parseTleToSatrec(tleText: string): Satrec | null {
   const sat = (window as any).satellite;
   if (!sat) return null;
   try {
     const lines = tleText.trim().split('\n');
     const line1 = lines.length >= 2 ? lines[lines.length - 2] : lines[0];
     const line2 = lines.length >= 2 ? lines[lines.length - 1] : lines[1];
-    const satrec = sat.twoline2satrec(line1, line2);
+    return sat.twoline2satrec(line1, line2);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * satrec로 특정 시각의 위치·속도 계산 (파싱 생략, preRender 등 고빈도 호출용)
+ */
+export function getPositionFromSatrec(
+  satrec: Satrec,
+  time: Cesium.JulianDate
+): TlePositionResult | null {
+  const sat = (window as any).satellite;
+  if (!sat) return null;
+  try {
     const date = Cesium.JulianDate.toDate(time);
     const posVel = sat.propagate(satrec, date);
     if (posVel.error) return null;
@@ -59,6 +74,18 @@ export function getPositionFromTLE(
   } catch {
     return null;
   }
+}
+
+/**
+ * TLE로부터 특정 시각의 위치·속도 계산 (satellite.js SGP4)
+ */
+export function getPositionFromTLE(
+  tleText: string,
+  time: Cesium.JulianDate
+): TlePositionResult | null {
+  const satrec = parseTleToSatrec(tleText);
+  if (!satrec) return null;
+  return getPositionFromSatrec(satrec, time);
 }
 
 /**
