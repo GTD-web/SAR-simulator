@@ -136,8 +136,10 @@ export const CAMERA = {
   ORBIT_TAB_ZOOM_RANGE: 200,
   /** 궤도 추적 시 pitch (도) - 양수=위에서 내려다보기 */
   ORBIT_TRACK_PITCH_DEGREES: 45,
-  /** Fly to Satellite 버튼 시 pitch (도) - 정수리(위에서 아래) 뷰 (Cesium: 음수=위에서 내려다보기) */
-  FLY_TO_SATELLITE_PITCH_DEGREES: -90,
+  /** Fly to Satellite 버튼 시 pitch (도) - 등각(45°) 뷰, 양수=카메라가 위에 있어 아래를 봄 */
+  FLY_TO_SATELLITE_PITCH_DEGREES: 45,
+  /** Fly to Satellite 버튼 시 카메라 거리 (미터) - 위성 가까이 */
+  FLY_TO_SATELLITE_RANGE: 50,
 } as const;
 
 // 위치 검증 범위

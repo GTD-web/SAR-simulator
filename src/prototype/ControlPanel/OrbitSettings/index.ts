@@ -19,6 +19,42 @@ import {
 import { OrbitPathManager } from './_util/orbit-path-manager.js';
 import { renderOrbitForm } from './_ui/orbit-form-renderer.js';
 
+const scratchCartesian = new Cesium.Cartesian3();
+const scratchCartesian2 = new Cesium.Cartesian3();
+const scratchMatrix = new Cesium.Matrix4();
+
+/** target + offset으로 카메라 위치·방향 계산 후 setView (lookAt 대신, 고정 없이 위치 이동만) */
+function setCameraAtPosition(
+  camera: any,
+  target: Cesium.Cartesian3,
+  headingDeg: number,
+  pitchDeg: number,
+  range: number
+): void {
+  const h = Cesium.Math.toRadians(headingDeg);
+  const p = Cesium.Math.toRadians(pitchDeg);
+  const cosP = Math.cos(p);
+  const sinP = Math.sin(p);
+  const cosH = Math.cos(h);
+  const sinH = Math.sin(h);
+  const localOffset = new Cesium.Cartesian3(
+    range * cosP * sinH,
+    range * cosP * cosH,
+    range * sinP
+  );
+  const transform = Cesium.Transforms.eastNorthUpToFixedFrame(target, undefined, scratchMatrix);
+  const dest = Cesium.Matrix4.multiplyByPoint(transform, localOffset, new Cesium.Cartesian3());
+  const direction = Cesium.Cartesian3.normalize(
+    Cesium.Cartesian3.subtract(target, dest, scratchCartesian),
+    scratchCartesian
+  );
+  const up = Cesium.Cartesian3.normalize(target, scratchCartesian2);
+  camera.setView({
+    destination: dest,
+    orientation: { direction, up },
+  });
+}
+
 export interface OrbitSettingsOptions {
   /** 위성 설정에서 생성한 위성 엔티티를 배치할 때 사용. 없으면 배치하지 않음 */
   busPayloadManager?: import('../SatelliteSettings/SatelliteBusPayloadManager/index.js').SatelliteBusPayloadManager | null;
@@ -288,16 +324,26 @@ export class OrbitSettings {
         );
       }
       this.stopTracking();
-      const cameraRange = calculateCameraRange();
+      const cameraRange = topDownView ? CAMERA.FLY_TO_SATELLITE_RANGE : calculateCameraRange();
       const pitchDeg = topDownView ? CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES : CAMERA.PITCH_DEGREES;
-      this.viewer.camera.lookAt(
-        position,
-        new Cesium.HeadingPitchRange(
-          Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
-          Cesium.Math.toRadians(pitchDeg),
+      if (topDownView) {
+        setCameraAtPosition(
+          this.viewer.camera,
+          position,
+          CAMERA.HEADING_DEGREES,
+          pitchDeg,
           cameraRange
-        )
-      );
+        );
+      } else {
+        this.viewer.camera.lookAt(
+          position,
+          new Cesium.HeadingPitchRange(
+            Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
+            Cesium.Math.toRadians(pitchDeg),
+            cameraRange
+          )
+        );
+      }
       return;
     }
 
@@ -306,16 +352,26 @@ export class OrbitSettings {
         this.stopTracking();
         const pos = busEntity.position?.getValue(Cesium.JulianDate.now());
         if (pos) {
-          const cameraRange = calculateCameraRange();
+          const cameraRange = topDownView ? CAMERA.FLY_TO_SATELLITE_RANGE : calculateCameraRange();
           const pitchDeg = topDownView ? CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES : CAMERA.PITCH_DEGREES;
-          this.viewer.camera.lookAt(
-            pos,
-            new Cesium.HeadingPitchRange(
-              Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
-              Cesium.Math.toRadians(pitchDeg),
+          if (topDownView) {
+            setCameraAtPosition(
+              this.viewer.camera,
+              pos,
+              CAMERA.HEADING_DEGREES,
+              pitchDeg,
               cameraRange
-            )
-          );
+            );
+          } else {
+            this.viewer.camera.lookAt(
+              pos,
+              new Cesium.HeadingPitchRange(
+                Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
+                Cesium.Math.toRadians(pitchDeg),
+                cameraRange
+              )
+            );
+          }
         }
         // 시뮬레이션 중지 상태에서는 카메라 추적 불필요 (무한 업데이트 방지)
       } else {
@@ -323,14 +379,12 @@ export class OrbitSettings {
         if (topDownView) {
           const pos = busEntity.position?.getValue(Cesium.JulianDate.now());
           if (pos) {
-            const cameraRange = calculateCameraRange();
-            this.viewer.camera.lookAt(
+            setCameraAtPosition(
+              this.viewer.camera,
               pos,
-              new Cesium.HeadingPitchRange(
-                Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
-                Cesium.Math.toRadians(CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES),
-                cameraRange
-              )
+              CAMERA.HEADING_DEGREES,
+              CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES,
+              CAMERA.FLY_TO_SATELLITE_RANGE
             );
           }
         } else {
@@ -392,8 +446,7 @@ export class OrbitSettings {
   }
 
   /**
-   * 위성으로 1회 줌 (추적 없음, 시뮬레이션 중 위성 보기용)
-   * zoomTo 대신 lookAt 사용 (box geometry 엔티티 zoomTo 멈춤 회피)
+   * 위성 위치로 카메라 이동 (고정 없음, setView로 위치만 이동)
    */
   zoomToSatelliteOnce(): void {
     const busEntity = this.busPayloadManager?.getBusEntity();
@@ -404,13 +457,12 @@ export class OrbitSettings {
     const pos = busEntity.position?.getValue?.(this.viewer.clock.currentTime);
     if (!pos) return;
 
-    this.viewer.camera.lookAt(
+    setCameraAtPosition(
+      this.viewer.camera,
       pos,
-      new Cesium.HeadingPitchRange(
-        Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
-        Cesium.Math.toRadians(CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES),
-        CAMERA.ORBIT_TAB_ZOOM_RANGE
-      )
+      CAMERA.HEADING_DEGREES,
+      CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES,
+      CAMERA.FLY_TO_SATELLITE_RANGE
     );
   }
 
