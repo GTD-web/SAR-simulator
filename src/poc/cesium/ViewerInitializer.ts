@@ -38,6 +38,20 @@ export class ViewerInitializer {
     // 깊이 테스트 비활성화
     viewer.scene.globe.depthTestAgainstTerrain = false;
 
+    // 좌클릭 드래그로 카메라 방향(회전) 변경
+    const controller = viewer.scene.screenSpaceCameraController;
+    controller.enableRotate = true;
+    controller.enableLook = true;
+    controller.enableTranslate = true;
+
+    // 위성 근접 시 모델이 사라지는 문제 방지
+    const frustum = viewer.camera.frustum;
+    if (frustum && frustum.near !== undefined) {
+      frustum.near = 0.01; // near plane 1cm (기본 1m → 근접 뷰 허용)
+    }
+    controller.minimumZoomDistance = 0.5; // 최소 줌 거리 50cm (위성 근접 뷰 허용)
+    controller.enableCollisionDetection = false; // 궤도 위성 뷰 시 카메라가 밀려나지 않도록
+
     return viewer;
   }
 }

@@ -447,6 +447,7 @@ export class OrbitSettings {
 
   /**
    * 위성 위치로 카메라 이동 (고정 없음, setView로 위치만 이동)
+   * 다음 프레임에 한 번 더 적용하여 충돌 감지 등으로 밀려나는 현상 방지
    */
   zoomToSatelliteOnce(): void {
     const busEntity = this.busPayloadManager?.getBusEntity();
@@ -454,16 +455,20 @@ export class OrbitSettings {
     this.stopTracking();
     this.viewer.selectedEntity = busEntity;
 
-    const pos = busEntity.position?.getValue?.(this.viewer.clock.currentTime);
-    if (!pos) return;
+    const applyCamera = (): void => {
+      const pos = busEntity.position?.getValue?.(this.viewer.clock.currentTime);
+      if (!pos) return;
+      setCameraAtPosition(
+        this.viewer.camera,
+        pos,
+        CAMERA.HEADING_DEGREES,
+        CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES,
+        CAMERA.FLY_TO_SATELLITE_RANGE
+      );
+    };
 
-    setCameraAtPosition(
-      this.viewer.camera,
-      pos,
-      CAMERA.HEADING_DEGREES,
-      CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES,
-      CAMERA.FLY_TO_SATELLITE_RANGE
-    );
+    applyCamera();
+    requestAnimationFrame(() => applyCamera());
   }
 
   /** 시뮬레이션(clock 재생)이 실행 중인지 */

@@ -2,6 +2,7 @@ import { ViewerInitializer } from './ViewerInitializer.js';
 import { ImageryManager } from './ImageryManager.js';
 import { BuildingManager } from './BuildingManager.js';
 import { CameraManager } from './CameraManager.js';
+import { setupWasdCameraController } from './WasdCameraController.js';
 
 /**
  * CesiumViewerManager - Cesium 뷰어 통합 관리
@@ -13,6 +14,7 @@ export class CesiumViewerManager {
   private imageryManager: ImageryManager | null;
   private buildingManager: BuildingManager | null;
   private cameraManager: CameraManager | null;
+  private wasdCleanup: (() => void) | null;
 
   constructor(containerId: string) {
     this.containerId = containerId;
@@ -21,6 +23,7 @@ export class CesiumViewerManager {
     this.imageryManager = null;
     this.buildingManager = null;
     this.cameraManager = null;
+    this.wasdCleanup = null;
   }
 
   /**
@@ -111,6 +114,23 @@ export class CesiumViewerManager {
     if (this.viewer.canvas) {
       this.viewer.canvas.style.cursor = cursor;
     }
+  }
+
+  /**
+   * WASD 키보드로 카메라 앞뒤좌우 이동 설정
+   */
+  setupWasdCameraControls(): void {
+    if (!this.viewer) return;
+    this.wasdCleanup?.();
+    this.wasdCleanup = setupWasdCameraController(this.viewer);
+  }
+
+  /**
+   * WASD 컨트롤 해제 (cleanup 시 호출)
+   */
+  removeWasdCameraControls(): void {
+    this.wasdCleanup?.();
+    this.wasdCleanup = null;
   }
 
   /**

@@ -527,6 +527,9 @@ export class PrototypePage {
       this.viewerManager.setupMapRightClickHandler((lon, lat, x, y) => {
         this.showMapContextMenu(lon, lat, x, y);
       });
+
+      // 8. WASD 키보드로 카메라 앞뒤좌우 이동
+      this.viewerManager.setupWasdCameraControls();
     } catch (error) {
       console.error('[PrototypePage] 초기화 오류:', error);
     }
@@ -565,6 +568,9 @@ export class PrototypePage {
     this.regionInfoPanel = null;
     const styleEl = document.getElementById('targetGeoDataSidebarStyles');
     if (styleEl) styleEl.remove();
+
+    // WASD 컨트롤 해제
+    this.viewerManager?.removeWasdCameraControls?.();
 
     // Cesium 뷰어 정리
     if (this.viewer) {
