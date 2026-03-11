@@ -19,10 +19,8 @@ const RADARSAT_RCM: OrbitalElements = {
 export interface OrbitFormRendererCallbacks {
   /** 궤도 입력값 변경 시 호출 (debounced) */
   onOrbitChange: () => void;
-  /** 시뮬레이션 시작/중지 토글 */
-  onSimulationToggle: () => void;
-  /** 시뮬레이션 버튼 요소 전달 (텍스트 업데이트용) */
-  onSimulationButtonReady?: (btn: HTMLButtonElement) => void;
+  /** 궤도 및 시각 적용 버튼 클릭 시 호출 */
+  onApplyOrbit?: () => void;
 }
 
 /**
@@ -77,20 +75,22 @@ export function renderOrbitForm(
   const koreaPassTime = computeTimeOverPosition(RADARSAT_RCM, refTime);
   const defaultInitialDate = Cesium.JulianDate.toDate(koreaPassTime);
 
-  // 초기 시각
-  const initialTimeLabel = document.createElement('label');
-  initialTimeLabel.style.marginTop = '10px';
-  initialTimeLabel.style.display = 'block';
-  initialTimeLabel.textContent = 'Initial Time:';
-  const initialTimeInput = document.createElement('input');
-  initialTimeInput.type = 'datetime-local';
-  initialTimeInput.id = ORBIT_FORM_IDS.INITIAL_TIME;
+  // 초기 날짜 (UTC) - 선택한 날짜의 00:00 UTC부터 시작
+  const initialDateWrapper = document.createElement('div');
+  initialDateWrapper.lang = 'en-US';
+  initialDateWrapper.style.marginTop = '10px';
+  const initialDateLabel = document.createElement('label');
+  initialDateLabel.style.display = 'block';
+  initialDateLabel.textContent = 'Initial Date (UTC):';
+  const initialDateInput = document.createElement('input');
+  initialDateInput.type = 'date';
+  initialDateInput.id = ORBIT_FORM_IDS.INITIAL_TIME;
   const d = defaultInitialDate;
-  initialTimeInput.value =
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T` +
-    `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  initialTimeLabel.appendChild(initialTimeInput);
-  form.appendChild(initialTimeLabel);
+  initialDateInput.value =
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  initialDateLabel.appendChild(initialDateInput);
+  initialDateWrapper.appendChild(initialDateLabel);
+  form.appendChild(initialDateWrapper);
 
   createInputField(
     form,
@@ -189,6 +189,19 @@ export function renderOrbitForm(
   passDirectionLabel.textContent = 'Pass Direction: -';
   form.appendChild(passDirectionLabel);
 
+  // 궤도 및 시각 적용 버튼
+  const applyButton = document.createElement('button');
+  applyButton.textContent = 'Apply Orbit & Date';
+  applyButton.className = 'sidebar-section-apply-orbit';
+  applyButton.style.marginTop = '16px';
+  applyButton.style.width = '100%';
+  applyButton.style.padding = '10px';
+  applyButton.style.cursor = 'pointer';
+  if (callbacks.onApplyOrbit) {
+    applyButton.addEventListener('click', callbacks.onApplyOrbit);
+  }
+  form.appendChild(applyButton);
+
   // 궤도 입력 변경 시 즉시 적용 (debounced는 OrbitSettings에서 처리)
   const orbitInputIds = [
     ORBIT_FORM_IDS.INITIAL_TIME,
@@ -207,18 +220,6 @@ export function renderOrbitForm(
       el.addEventListener('change', () => callbacks.onOrbitChange());
     }
   });
-
-  // 시뮬레이션 시작/중지 버튼
-  const simulationButton = document.createElement('button');
-  simulationButton.type = 'button';
-  simulationButton.id = 'prototypeOrbitSimulationButton';
-  simulationButton.className = 'sidebar-section button';
-  simulationButton.style.width = '100%';
-  simulationButton.style.marginTop = '15px';
-  simulationButton.textContent = 'Simulation Start';
-  simulationButton.addEventListener('click', () => callbacks.onSimulationToggle());
-  form.appendChild(simulationButton);
-  callbacks.onSimulationButtonReady?.(simulationButton);
 
   section.appendChild(form);
   container.appendChild(section);

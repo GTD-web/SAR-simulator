@@ -245,7 +245,8 @@ export class ControlPanelManager {
   }
 
   /**
-   * 위성으로 카메라 이동 (버튼 클릭 시 호출)
+   * 위성으로 카메라 이동 + 추적 (버튼 클릭 시 호출)
+   * 시뮬레이션 유지, 카메라가 위성 움직임에 따라 추적
    */
   private flyToSatellite(): void {
     if (!this.viewer) return;
@@ -253,12 +254,7 @@ export class ControlPanelManager {
       this.satelliteSettings.cancelCameraAnimation();
       this.satelliteSettings.ensureEntityExists();
     }
-    // 시뮬레이션 중이면 위성으로 1회 줌 (추적 없음)
-    if (this.orbitSettings?.isSimulationRunning()) {
-      this.orbitSettings.zoomToSatelliteOnce();
-      return;
-    }
-    this.orbitSettings?.flyToOrbitPosition(false, true);
+    this.orbitSettings?.zoomToSatelliteAndTrack();
   }
 
   /**

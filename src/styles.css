@@ -146,7 +146,7 @@ html, body, #cesiumContainer {
 
 .swath-group-item.in-progress:hover {
   background: rgba(156, 39, 176, 0.15);
-  border-color: #45a049;
+  border-color: #B03FD4;
   box-shadow: 0 0 15px rgba(156, 39, 176, 0.5);
 }
 
@@ -560,7 +560,7 @@ html, body, #cesiumContainer {
 }
 
 #swathGroupsToggleFromTab:hover {
-  background: #45a049;
+  background: #B03FD4;
 }
 
 .sidebar-section label {
@@ -689,7 +689,7 @@ html, body, #cesiumContainer {
 }
 
 .sidebar-section button:hover {
-  background: #45a049;
+  background: #B03FD4;
 }
 
 .sidebar-section .info {

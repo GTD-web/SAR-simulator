@@ -76,8 +76,6 @@ export class OrbitSettings {
   private orbitPathManager: OrbitPathManager | null;
   /** 궤도 입력 변경 debounce 타이머 */
   private orbitChangeDebounceTimer: number | null;
-  /** 시뮬레이션 버튼 요소 (텍스트 업데이트용) */
-  private simulationButton: HTMLButtonElement | null;
   /** 마지막 적용한 위성 위치 (떨림 방지용 최소 이동량 체크) */
   private lastAppliedPos: { longitude: number; latitude: number; altitude: number } | null;
   /** 더블클릭 핸들러 제거 함수 (cleanup용) */
@@ -92,7 +90,6 @@ export class OrbitSettings {
     this.postRenderHandler = null;
     this.orbitPathManager = null;
     this.orbitChangeDebounceTimer = null;
-    this.simulationButton = null;
     this.lastAppliedPos = null;
     this.doubleClickRemove = null;
   }
@@ -116,11 +113,7 @@ export class OrbitSettings {
 
     renderOrbitForm(this.container, {
       onOrbitChange: () => this.debouncedApplyOrbit(),
-      onSimulationToggle: () => this.toggleSimulation(),
-      onSimulationButtonReady: (btn) => {
-        this.simulationButton = btn;
-        this.updateSimulationButtonText();
-      },
+      onApplyOrbit: () => this.applyOrbitToSatellite(true, true),
     });
 
     if (this.viewer) {
@@ -203,30 +196,6 @@ export class OrbitSettings {
   }
 
   /**
-   * 시뮬레이션 시작/중지 토글
-   */
-  toggleSimulation(): void {
-    if (this.isSimulationRunning()) {
-      this.stopSimulationLoop();
-    } else {
-      this.applyOrbitToSatellite(false, false); // TLE/위치 갱신 (시뮬레이션은 시작하지 않음)
-      this.startSimulationLoop();
-    }
-    this.updateSimulationButtonText();
-  }
-
-  /**
-   * 시뮬레이션 버튼 텍스트 업데이트
-   */
-  private updateSimulationButtonText(): void {
-    if (this.simulationButton) {
-      this.simulationButton.textContent = this.isSimulationRunning()
-        ? 'Simulation Stop'
-        : 'Simulation Start';
-    }
-  }
-
-  /**
    * 폼에서 궤도 6요소와 초기 시각 파싱 (orbit-form-parser 래퍼)
    */
   private getParsedForm(): ParsedOrbitForm | null {
@@ -252,6 +221,7 @@ export class OrbitSettings {
     this.stopSimulationLoop();
     this.simulationEnabled = false;
 
+    const parsed = this.getParsedForm();
     const result = this.getOrbitPositionFromForm();
     const busEntity = this.busPayloadManager?.getBusEntity();
 
@@ -266,6 +236,23 @@ export class OrbitSettings {
         result.velocityEcef.y,
         result.velocityEcef.z
       );
+    }
+
+    // Initial Time을 시뮬레이션 시작 시간으로 타임라인 설정
+    if (parsed && this.viewer.clock) {
+      const periodSeconds = calculateOrbitalPeriod(parsed.elements.semiMajorAxis) * 3600;
+      const startTime = parsed.epochTime;
+      const stopTime = Cesium.JulianDate.addSeconds(
+        parsed.epochTime,
+        2 * periodSeconds,
+        new Cesium.JulianDate()
+      );
+      this.viewer.clock.startTime = Cesium.JulianDate.addSeconds(startTime, 0, new Cesium.JulianDate());
+      this.viewer.clock.stopTime = Cesium.JulianDate.addSeconds(stopTime, 0, new Cesium.JulianDate());
+      this.viewer.clock.currentTime = Cesium.JulianDate.addSeconds(startTime, 0, new Cesium.JulianDate());
+      if (this.viewer.timeline) {
+        this.viewer.timeline.zoomTo(startTime, stopTime);
+      }
     }
 
     this.drawOrbitPath();
@@ -300,6 +287,12 @@ export class OrbitSettings {
         result.velocityEcef.y,
         result.velocityEcef.z
       );
+      // lastAppliedPos 동기화 - preRender 핸들러가 다음 프레임에 중복 updatePosition 호출하는 것 방지
+      this.lastAppliedPos = {
+        longitude: result.longitude,
+        latitude: result.latitude,
+        altitude: result.altitude,
+      };
       // 탭 전환 시에는 시뮬레이션 루프를 시작하지 않음 (계속 업데이트 방지)
       // 시뮬레이션은 '궤도 적용' 버튼 클릭 시에만 시작
     }
@@ -348,9 +341,18 @@ export class OrbitSettings {
     }
 
     if (busEntity) {
+      const pos = busEntity.position?.getValue(Cesium.JulianDate.now());
+      if (pos) {
+        // lastAppliedPos 동기화 - preRender 핸들러의 중복 updatePosition 방지
+        const carto = Cesium.Cartographic.fromCartesian(pos);
+        this.lastAppliedPos = {
+          longitude: Cesium.Math.toDegrees(carto.longitude),
+          latitude: Cesium.Math.toDegrees(carto.latitude),
+          altitude: carto.height,
+        };
+      }
       if (trackEntity) {
         this.stopTracking();
-        const pos = busEntity.position?.getValue(Cesium.JulianDate.now());
         if (pos) {
           const cameraRange = topDownView ? CAMERA.FLY_TO_SATELLITE_RANGE : calculateCameraRange();
           const pitchDeg = topDownView ? CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES : CAMERA.PITCH_DEGREES;
@@ -376,17 +378,14 @@ export class OrbitSettings {
         // 시뮬레이션 중지 상태에서는 카메라 추적 불필요 (무한 업데이트 방지)
       } else {
         this.stopTracking();
-        if (topDownView) {
-          const pos = busEntity.position?.getValue(Cesium.JulianDate.now());
-          if (pos) {
-            setCameraAtPosition(
-              this.viewer.camera,
-              pos,
-              CAMERA.HEADING_DEGREES,
-              CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES,
-              CAMERA.FLY_TO_SATELLITE_RANGE
-            );
-          }
+        if (topDownView && pos) {
+          setCameraAtPosition(
+            this.viewer.camera,
+            pos,
+            CAMERA.HEADING_DEGREES,
+            CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES,
+            CAMERA.FLY_TO_SATELLITE_RANGE
+          );
         } else {
           setupCameraAngle(this.viewer, busEntity);
         }
@@ -469,6 +468,28 @@ export class OrbitSettings {
 
     applyCamera();
     requestAnimationFrame(() => applyCamera());
+  }
+
+  /**
+   * 위성으로 카메라 이동 + 추적 (시뮬레이션 유지, 카메라가 위성 움직임 추적)
+   */
+  zoomToSatelliteAndTrack(): void {
+    const busEntity = this.busPayloadManager?.getBusEntity();
+    if (!busEntity || !this.viewer) return;
+
+    const pos = busEntity.position?.getValue?.(this.viewer.clock.currentTime);
+    if (!pos) return;
+
+    setCameraAtPosition(
+      this.viewer.camera,
+      pos,
+      CAMERA.HEADING_DEGREES,
+      CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES,
+      CAMERA.FLY_TO_SATELLITE_RANGE
+    );
+    this.viewer.trackedEntity = busEntity;
+    this.viewer.scene.screenSpaceCameraController.maximumZoomDistance =
+      CAMERA.MAX_ZOOM_DISTANCE_WHEN_TRACKING;
   }
 
   /** 시뮬레이션(clock 재생)이 실행 중인지 */
@@ -579,7 +600,6 @@ export class OrbitSettings {
     if (this.viewer?.clock) {
       this.viewer.clock.shouldAnimate = false;
     }
-    this.updateSimulationButtonText();
   }
 
   /**
@@ -725,7 +745,6 @@ export class OrbitSettings {
       this.orbitChangeDebounceTimer = null;
     }
     this.doubleClickRemove?.();
-    this.simulationButton = null;
     this.stopSimulationLoop();
     this.removeOrbitPostRender();
     this.stopCameraTracking();

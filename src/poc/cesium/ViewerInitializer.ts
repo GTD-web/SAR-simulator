@@ -38,6 +38,9 @@ export class ViewerInitializer {
     // 깊이 테스트 비활성화
     viewer.scene.globe.depthTestAgainstTerrain = false;
 
+    // 위성 근접 뷰 시 depth 정밀도 개선 (Fly to Satellite 등)
+    viewer.scene.logarithmicDepthBuffer = true;
+
     // 좌클릭 드래그로 카메라 방향(회전) 변경
     const controller = viewer.scene.screenSpaceCameraController;
     controller.enableRotate = true;

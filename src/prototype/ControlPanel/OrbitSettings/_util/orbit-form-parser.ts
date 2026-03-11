@@ -63,15 +63,16 @@ export function getElementsAndEpochTimeFromForm(
   } else {
     elements.meanAnomaly = anomaly;
   }
-  const initialTimeStr = (
+  const initialDateStr = (
     root.querySelector(`#${ORBIT_FORM_IDS.INITIAL_TIME}`) as HTMLInputElement
   )?.value?.trim();
-  const initialTimeValid =
-    initialTimeStr !== undefined &&
-    initialTimeStr !== '' &&
-    !Number.isNaN(new Date(initialTimeStr).getTime());
-  const epochTime = initialTimeValid
-    ? Cesium.JulianDate.fromDate(new Date(initialTimeStr!))
+  // date 값(YYYY-MM-DD)은 해당 날짜 00:00 UTC로 해석
+  const utcMidnightStr = initialDateStr ? `${initialDateStr}T00:00:00Z` : '';
+  const initialDateValid =
+    utcMidnightStr !== '' &&
+    !Number.isNaN(new Date(utcMidnightStr).getTime());
+  const epochTime = initialDateValid
+    ? Cesium.JulianDate.fromDate(new Date(utcMidnightStr))
     : fallbackTime ?? Cesium.JulianDate.now();
   return { elements, epochTime };
 }
