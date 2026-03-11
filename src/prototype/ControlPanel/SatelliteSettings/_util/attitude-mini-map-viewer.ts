@@ -268,9 +268,7 @@ export class AttitudeMiniMapViewer {
     if (!this.miniViewer || !this.mainViewer || !this.busPayloadManager) return;
 
     const removePostRender = this.mainViewer.scene.postRender.addEventListener(() => {
-      requestAnimationFrame(() => {
-        this.syncClockAndUpdateCamera();
-      });
+      this.syncClockAndUpdateCamera();
     });
 
     this.postRenderRemove = removePostRender;
@@ -300,14 +298,19 @@ export class AttitudeMiniMapViewer {
       const orientation = busEntity.orientation.getValue(time);
       if (!busPos || !orientation) return;
 
-      const antennaPos = antennaEntity?.position?.getValue?.(time);
-      const targetPos = antennaPos
-        ? Cesium.Cartesian3.multiplyByScalar(
+      let targetPos = busPos;
+      try {
+        const antennaPos = antennaEntity?.position?.getValue?.(time);
+        if (antennaPos) {
+          targetPos = Cesium.Cartesian3.multiplyByScalar(
             Cesium.Cartesian3.add(busPos, antennaPos, new Cesium.Cartesian3()),
             0.5,
             new Cesium.Cartesian3()
-          )
-        : busPos;
+          );
+        }
+      } catch {
+        targetPos = busPos;
+      }
 
       const matrix = Cesium.Matrix3.fromQuaternion(orientation);
       const xAxis = Cesium.Matrix3.multiplyByVector(

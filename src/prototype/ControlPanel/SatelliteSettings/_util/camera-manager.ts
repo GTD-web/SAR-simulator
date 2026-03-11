@@ -183,22 +183,28 @@ export function setCameraToEntityHorizontal(
 }
 
 /**
- * 엔티티로 카메라 이동 후 추적 (trackedEntity 설정, flyToPosition 호출 안 함)
+ * 엔티티로 카메라 이동 (zoomTo)
+ * @param setTrackedEntity false면 trackedEntity 미설정 (시뮬레이션 시 수동 lookAt용)
  */
 export function zoomToEntityAndTrack(
   viewer: any,
   entity: any,
-  cameraRange?: number
+  cameraRange?: number,
+  duration?: number,
+  setTrackedEntity = true
 ): void {
   if (!viewer || !entity) return;
   const range = cameraRange ?? calculateCameraRange();
+  const pitch = cameraRange != null ? CAMERA.ORBIT_TRACK_PITCH_DEGREES : CAMERA.PITCH_DEGREES;
   const offset = new Cesium.HeadingPitchRange(
     Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
-    Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
+    Cesium.Math.toRadians(pitch),
     range
   );
-  viewer.zoomTo(entity, { offset });
-  viewer.trackedEntity = entity;
+  viewer.zoomTo(entity, { offset, duration: duration ?? 1 });
+  if (setTrackedEntity) {
+    viewer.trackedEntity = entity;
+  }
   viewer.scene.screenSpaceCameraController.maximumZoomDistance =
     CAMERA.MAX_ZOOM_DISTANCE_WHEN_TRACKING;
 }

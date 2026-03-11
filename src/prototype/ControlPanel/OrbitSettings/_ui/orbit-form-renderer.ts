@@ -17,8 +17,12 @@ const RADARSAT_RCM: OrbitalElements = {
 };
 
 export interface OrbitFormRendererCallbacks {
-  /** 궤도 적용 버튼 클릭 시 호출 (폼 change는 무한 업데이트 방지를 위해 사용하지 않음) */
-  onApply: () => void;
+  /** 궤도 입력값 변경 시 호출 (debounced) */
+  onOrbitChange: () => void;
+  /** 시뮬레이션 시작/중지 토글 */
+  onSimulationToggle: () => void;
+  /** 시뮬레이션 버튼 요소 전달 (텍스트 업데이트용) */
+  onSimulationButtonReady?: (btn: HTMLButtonElement) => void;
 }
 
 /**
@@ -185,15 +189,36 @@ export function renderOrbitForm(
   passDirectionLabel.textContent = 'Pass Direction: -';
   form.appendChild(passDirectionLabel);
 
-  // 궤도 적용 버튼
-  const applyButton = document.createElement('button');
-  applyButton.type = 'button';
-  applyButton.className = 'sidebar-section button';
-  applyButton.style.width = '100%';
-  applyButton.style.marginTop = '15px';
-  applyButton.textContent = 'Apply Orbit';
-  applyButton.addEventListener('click', () => callbacks.onApply());
-  form.appendChild(applyButton);
+  // 궤도 입력 변경 시 즉시 적용 (debounced는 OrbitSettings에서 처리)
+  const orbitInputIds = [
+    ORBIT_FORM_IDS.INITIAL_TIME,
+    ORBIT_FORM_IDS.SEMI_MAJOR_AXIS,
+    ORBIT_FORM_IDS.ECCENTRICITY,
+    ORBIT_FORM_IDS.INCLINATION,
+    ORBIT_FORM_IDS.RAAN,
+    ORBIT_FORM_IDS.ARGUMENT_OF_PERIGEE,
+    ORBIT_FORM_IDS.ANOMALY_TYPE,
+    ORBIT_FORM_IDS.ANOMALY,
+  ];
+  orbitInputIds.forEach((id) => {
+    const el = section.querySelector(`#${id}`);
+    if (el) {
+      el.addEventListener('input', () => callbacks.onOrbitChange());
+      el.addEventListener('change', () => callbacks.onOrbitChange());
+    }
+  });
+
+  // 시뮬레이션 시작/중지 버튼
+  const simulationButton = document.createElement('button');
+  simulationButton.type = 'button';
+  simulationButton.id = 'prototypeOrbitSimulationButton';
+  simulationButton.className = 'sidebar-section button';
+  simulationButton.style.width = '100%';
+  simulationButton.style.marginTop = '15px';
+  simulationButton.textContent = 'Simulation Start';
+  simulationButton.addEventListener('click', () => callbacks.onSimulationToggle());
+  form.appendChild(simulationButton);
+  callbacks.onSimulationButtonReady?.(simulationButton);
 
   section.appendChild(form);
   container.appendChild(section);

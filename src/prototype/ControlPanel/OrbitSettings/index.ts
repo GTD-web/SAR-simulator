@@ -7,6 +7,7 @@ import {
   flyToPosition,
   setupCameraAngle,
   restoreZoomDistance,
+  zoomToEntityAndTrack,
 } from '../SatelliteSettings/_util/camera-manager.js';
 import { calculateCameraRange } from '../SatelliteSettings/_util/entity-creator.js';
 import { CAMERA } from '../SatelliteSettings/constants.js';
@@ -37,8 +38,14 @@ export class OrbitSettings {
   /** postRender 핸들러 (시뮬레이션 시 시간 기반 위치 업데이트) */
   private postRenderHandler: (() => void) | null;
   private orbitPathManager: OrbitPathManager | null;
-  /** Cesium trackedEntity용 point 프록시 (POC 방식, box geometry는 trackedEntity 버그) */
-  private trackProxyEntity: any;
+  /** 궤도 입력 변경 debounce 타이머 */
+  private orbitChangeDebounceTimer: number | null;
+  /** 시뮬레이션 버튼 요소 (텍스트 업데이트용) */
+  private simulationButton: HTMLButtonElement | null;
+  /** 마지막 적용한 위성 위치 (떨림 방지용 최소 이동량 체크) */
+  private lastAppliedPos: { longitude: number; latitude: number; altitude: number } | null;
+  /** 더블클릭 핸들러 제거 함수 (cleanup용) */
+  private doubleClickRemove: (() => void) | null;
 
   constructor() {
     this.container = null;
@@ -48,7 +55,10 @@ export class OrbitSettings {
     this.simulationEnabled = true;
     this.postRenderHandler = null;
     this.orbitPathManager = null;
-    this.trackProxyEntity = null;
+    this.orbitChangeDebounceTimer = null;
+    this.simulationButton = null;
+    this.lastAppliedPos = null;
+    this.doubleClickRemove = null;
   }
 
   /**
@@ -59,6 +69,7 @@ export class OrbitSettings {
     this.viewer = viewer || null;
     this.busPayloadManager = options?.busPayloadManager ?? null;
     this.render();
+    this.setupDoubleClickToTrack();
   }
 
   /**
@@ -68,7 +79,12 @@ export class OrbitSettings {
     if (!this.container) return;
 
     renderOrbitForm(this.container, {
-      onApply: () => this.applyOrbitToSatellite(false),
+      onOrbitChange: () => this.debouncedApplyOrbit(),
+      onSimulationToggle: () => this.toggleSimulation(),
+      onSimulationButtonReady: (btn) => {
+        this.simulationButton = btn;
+        this.updateSimulationButtonText();
+      },
     });
 
     if (this.viewer) {
@@ -80,6 +96,98 @@ export class OrbitSettings {
 
     // TLE 궤도·엔티티 그리기는 SatelliteSettings.createInitialEntityOnOrbit 완료 후
     // applyOrbitToSatellite 호출로 수행됨 (위성 설정·궤도 설정 폼 값 반영)
+  }
+
+  /**
+   * 위성 엔티티 더블클릭 시 zoomTo + trackedEntity (Cesium 기본 동작과 동일)
+   */
+  private setupDoubleClickToTrack(): void {
+    if (!this.viewer?.scene?.canvas) return;
+    if (this.doubleClickRemove) return;
+
+    try {
+      const widget = this.viewer.cesiumWidget;
+      if (widget?.screenSpaceEventHandler) {
+        widget.screenSpaceEventHandler.removeInputAction(
+          Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK
+        );
+      }
+
+      const handler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
+
+      const action = (event: { position: { x: number; y: number } }) => {
+        const picked = this.viewer.scene.pick(event.position);
+        let entity = picked?.id;
+        if (!entity && picked) {
+          const drilled = this.viewer.scene.drillPick(event.position);
+          for (const obj of drilled) {
+            if (obj.id) {
+              entity = obj.id;
+              break;
+            }
+          }
+        }
+        if (!entity) return;
+
+        const busEntity = this.busPayloadManager?.getBusEntity();
+        const antennaEntity = this.busPayloadManager?.getAntennaEntity?.();
+        if (entity !== busEntity && entity !== antennaEntity) return;
+
+        this.viewer.selectedEntity = entity;
+        zoomToEntityAndTrack(
+          this.viewer,
+          busEntity ?? entity,
+          CAMERA.ORBIT_TAB_ZOOM_RANGE,
+          0,
+          false
+        );
+      };
+
+      handler.setInputAction(action, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+      this.doubleClickRemove = () => {
+        handler.destroy();
+        this.doubleClickRemove = null;
+      };
+    } catch (e) {
+      console.warn('[OrbitSettings] 더블클릭 핸들러 등록 실패:', e);
+    }
+  }
+
+  /**
+   * 궤도 입력 변경 시 debounced 적용 (값 변경 시 즉시 반영)
+   */
+  private debouncedApplyOrbit(): void {
+    if (this.orbitChangeDebounceTimer !== null) {
+      clearTimeout(this.orbitChangeDebounceTimer);
+    }
+    this.orbitChangeDebounceTimer = window.setTimeout(() => {
+      this.applyOrbitToSatellite(false, false);
+      this.orbitChangeDebounceTimer = null;
+    }, 400);
+  }
+
+  /**
+   * 시뮬레이션 시작/중지 토글
+   */
+  toggleSimulation(): void {
+    if (this.isSimulationRunning()) {
+      this.stopSimulationLoop();
+    } else {
+      this.applyOrbitToSatellite(false, false); // TLE/위치 갱신 (시뮬레이션은 시작하지 않음)
+      this.startSimulationLoop();
+    }
+    this.updateSimulationButtonText();
+  }
+
+  /**
+   * 시뮬레이션 버튼 텍스트 업데이트
+   */
+  private updateSimulationButtonText(): void {
+    if (this.simulationButton) {
+      this.simulationButton.textContent = this.isSimulationRunning()
+        ? 'Simulation Stop'
+        : 'Simulation Start';
+    }
   }
 
   /**
@@ -132,8 +240,10 @@ export class OrbitSettings {
 
   /**
    * 위성/궤도 위치로 카메라 이동 (버튼 클릭 시 호출)
+   * @param trackEntity true면 trackedEntity 설정
+   * @param topDownView true면 위에서 아래로 바라보는 정수리 뷰 (Fly to Satellite 버튼용)
    */
-  flyToOrbitPosition(trackEntity = false): void {
+  flyToOrbitPosition(trackEntity = false, topDownView = false): void {
     if (!this.viewer) return;
 
     // 탭 전환 시 시뮬레이션 중지 (무한 업데이트 방지)
@@ -179,11 +289,12 @@ export class OrbitSettings {
       }
       this.stopTracking();
       const cameraRange = calculateCameraRange();
+      const pitchDeg = topDownView ? CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES : CAMERA.PITCH_DEGREES;
       this.viewer.camera.lookAt(
         position,
         new Cesium.HeadingPitchRange(
           Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
-          Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
+          Cesium.Math.toRadians(pitchDeg),
           cameraRange
         )
       );
@@ -196,11 +307,12 @@ export class OrbitSettings {
         const pos = busEntity.position?.getValue(Cesium.JulianDate.now());
         if (pos) {
           const cameraRange = calculateCameraRange();
+          const pitchDeg = topDownView ? CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES : CAMERA.PITCH_DEGREES;
           this.viewer.camera.lookAt(
             pos,
             new Cesium.HeadingPitchRange(
               Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
-              Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
+              Cesium.Math.toRadians(pitchDeg),
               cameraRange
             )
           );
@@ -208,7 +320,22 @@ export class OrbitSettings {
         // 시뮬레이션 중지 상태에서는 카메라 추적 불필요 (무한 업데이트 방지)
       } else {
         this.stopTracking();
-        setupCameraAngle(this.viewer, busEntity);
+        if (topDownView) {
+          const pos = busEntity.position?.getValue(Cesium.JulianDate.now());
+          if (pos) {
+            const cameraRange = calculateCameraRange();
+            this.viewer.camera.lookAt(
+              pos,
+              new Cesium.HeadingPitchRange(
+                Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
+                Cesium.Math.toRadians(CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES),
+                cameraRange
+              )
+            );
+          }
+        } else {
+          setupCameraAngle(this.viewer, busEntity);
+        }
       }
       return;
     }
@@ -254,63 +381,42 @@ export class OrbitSettings {
   }
 
   /**
-   * 카메라 추적 중지 (trackProxy 제거, trackedEntity 해제)
+   * 카메라 추적 중지 (trackedEntity 해제 시 호출)
    */
   private stopTracking(): void {
-    if (this.trackProxyEntity && this.viewer) {
-      this.viewer.entities.remove(this.trackProxyEntity);
-      this.trackProxyEntity = null;
-    }
     if (this.viewer) {
       this.viewer.trackedEntity = undefined;
+      this.viewer.selectedEntity = undefined;
       restoreZoomDistance(this.viewer);
     }
   }
 
   /**
-   * 위성에 카메라 고정 시작 (엔티티 더블클릭과 동일: zoomTo + trackedEntity)
-   * box geometry 버그 → bus와 같은 position을 쓰는 point 프록시로 추적
-   * @param preserveView true면 zoomTo 생략, 현재 카메라 위치 유지하며 추적만 시작
+   * 위성으로 1회 줌 (추적 없음, 시뮬레이션 중 위성 보기용)
+   * zoomTo 대신 lookAt 사용 (box geometry 엔티티 zoomTo 멈춤 회피)
    */
-  startTracking(preserveView = false): boolean {
+  zoomToSatelliteOnce(): void {
     const busEntity = this.busPayloadManager?.getBusEntity();
-    if (!busEntity || !this.viewer) return false;
+    if (!busEntity || !this.viewer) return;
     this.stopTracking();
+    this.viewer.selectedEntity = busEntity;
 
-    this.trackProxyEntity = this.viewer.entities.add({
-      position: busEntity.position,
-      point: {
-        pixelSize: 1,
-        color: Cesium.Color.TRANSPARENT,
-        outlineColor: Cesium.Color.TRANSPARENT,
-        outlineWidth: 0,
-      },
-      show: false,
-    });
+    const pos = busEntity.position?.getValue?.(this.viewer.clock.currentTime);
+    if (!pos) return;
 
-    if (!preserveView) {
-      const offset = new Cesium.HeadingPitchRange(
+    this.viewer.camera.lookAt(
+      pos,
+      new Cesium.HeadingPitchRange(
         Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
-        Cesium.Math.toRadians(CAMERA.PITCH_DEGREES),
+        Cesium.Math.toRadians(CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES),
         CAMERA.ORBIT_TAB_ZOOM_RANGE
-      );
-      this.viewer.zoomTo(this.trackProxyEntity, { offset, duration: 0 });
-    }
-    this.viewer.trackedEntity = this.trackProxyEntity;
-    this.viewer.scene.screenSpaceCameraController.maximumZoomDistance =
-      CAMERA.MAX_ZOOM_DISTANCE_WHEN_TRACKING;
-
-    return true;
+      )
+    );
   }
 
-  /** 카메라가 위성에 고정 중인지 */
-  isTracking(): boolean {
-    return this.trackProxyEntity != null;
-  }
-
-  /** 시뮬레이션 루프가 실행 중인지 */
+  /** 시뮬레이션(clock 재생)이 실행 중인지 */
   isSimulationRunning(): boolean {
-    return this.postRenderHandler !== null;
+    return !!(this.viewer?.clock?.shouldAnimate);
   }
 
   /**
@@ -321,14 +427,63 @@ export class OrbitSettings {
   }
 
   /**
-   * 시뮬레이션 루프 시작 (postRender에서 TLE 기반 위치 업데이트)
+   * 궤도 preRender 핸들러 등록 (TLE 기반 위치 업데이트, Cesium play 버튼/타임라인과 연동)
+   * preRender 사용: 카메라 추적 시 해당 프레임의 위치를 먼저 갱신해야 추적이 정확함
+   */
+  private ensureOrbitPostRenderAttached(): void {
+    if (!this.viewer || !this.busPayloadManager?.getBusEntity() || !this.currentTLE) return;
+    if (this.postRenderHandler) return; // 이미 등록됨
+
+    /** 최소 이동량 (m) - 이보다 작은 변화는 무시하여 떨림 감소 (궤도 속도 ~7.5km/s이므로 0.5m로 부동소수점 노이즈만 필터) */
+    const MIN_MOVE_M = 0.5;
+    this.postRenderHandler = () => {
+      if (!this.currentTLE || !this.busPayloadManager?.getBusEntity()) return;
+      const currentTime = this.viewer.clock.currentTime;
+      const pos = getPositionFromTLE(this.currentTLE, currentTime);
+      if (pos) {
+        const newCart = Cesium.Cartesian3.fromDegrees(
+          pos.longitude,
+          pos.latitude,
+          pos.altitude
+        );
+        const shouldUpdate =
+          !this.lastAppliedPos ||
+          Cesium.Cartesian3.distance(
+            newCart,
+            Cesium.Cartesian3.fromDegrees(
+              this.lastAppliedPos.longitude,
+              this.lastAppliedPos.latitude,
+              this.lastAppliedPos.altitude
+            )
+          ) >= MIN_MOVE_M;
+        if (shouldUpdate) {
+          this.lastAppliedPos = {
+            longitude: pos.longitude,
+            latitude: pos.latitude,
+            altitude: pos.altitude,
+          };
+          this.busPayloadManager.updatePosition(this.lastAppliedPos);
+          this.busPayloadManager.setVelocityDirectionEcef(
+            pos.velocityEcef.x,
+            pos.velocityEcef.y,
+            pos.velocityEcef.z
+          );
+        }
+      }
+    };
+    this.viewer.scene.preRender.addEventListener(this.postRenderHandler);
+  }
+
+  /**
+   * 시뮬레이션 루프 시작 (postRender 등록 + clock 재생)
    */
   private startSimulationLoop(): void {
-    this.stopSimulationLoop();
     if (!this.viewer || !this.busPayloadManager?.getBusEntity() || !this.currentTLE) {
       console.warn('[OrbitSettings] 시뮬레이션 시작 불가: 뷰어/위성/TLE 필요');
       return;
     }
+
+    this.ensureOrbitPostRenderAttached();
 
     const parsed = this.getParsedForm();
     if (parsed && this.viewer.clock) {
@@ -340,33 +495,16 @@ export class OrbitSettings {
       this.viewer.clock.shouldAnimate = true;
     }
 
-    this.postRenderHandler = () => {
-      if (!this.currentTLE || !this.busPayloadManager?.getBusEntity()) return;
-      const currentTime = this.viewer.clock.currentTime;
-      const pos = getPositionFromTLE(this.currentTLE, currentTime);
-      if (pos) {
-        this.busPayloadManager.updatePosition({
-          longitude: pos.longitude,
-          latitude: pos.latitude,
-          altitude: pos.altitude,
-        });
-        this.busPayloadManager.setVelocityDirectionEcef(
-          pos.velocityEcef.x,
-          pos.velocityEcef.y,
-          pos.velocityEcef.z
-        );
-      }
-    };
-    this.viewer.scene.postRender.addEventListener(this.postRenderHandler);
-
+    this.lastAppliedPos = null; // 초기 위치 강제 적용
     const currentTime = this.viewer.clock.currentTime;
     const pos = getPositionFromTLE(this.currentTLE!, currentTime);
     if (pos) {
-      this.busPayloadManager!.updatePosition({
+      this.lastAppliedPos = {
         longitude: pos.longitude,
         latitude: pos.latitude,
         altitude: pos.altitude,
-      });
+      };
+      this.busPayloadManager!.updatePosition(this.lastAppliedPos);
       this.busPayloadManager!.setVelocityDirectionEcef(
         pos.velocityEcef.x,
         pos.velocityEcef.y,
@@ -378,11 +516,21 @@ export class OrbitSettings {
   }
 
   /**
-   * 시뮬레이션 루프 중지
+   * 시뮬레이션 루프 중지 (shouldAnimate만 false, postRender는 유지하여 타임라인 스크럽 시에도 위치 갱신)
    */
   private stopSimulationLoop(): void {
+    if (this.viewer?.clock) {
+      this.viewer.clock.shouldAnimate = false;
+    }
+    this.updateSimulationButtonText();
+  }
+
+  /**
+   * preRender 핸들러 제거 (cleanup 시에만 호출)
+   */
+  private removeOrbitPostRender(): void {
     if (this.postRenderHandler && this.viewer) {
-      this.viewer.scene.postRender.removeEventListener(this.postRenderHandler);
+      this.viewer.scene.preRender.removeEventListener(this.postRenderHandler);
       this.postRenderHandler = null;
     }
   }
@@ -462,9 +610,11 @@ export class OrbitSettings {
         this.viewer.timeline.zoomTo(startTime, stopTime);
       }
 
+      // postRender 등록 (Cesium play 버튼/타임라인 스크럽 시 위성 위치 갱신)
+      this.ensureOrbitPostRenderAttached();
+
       if (startSimulation) {
         this.startSimulationLoop();
-        this.startTracking(true); // 현재 시점 유지하며 위성 추적 시작
       } else {
         const position = Cesium.Cartesian3.fromDegrees(
           result.longitude,
@@ -513,7 +663,14 @@ export class OrbitSettings {
    * Cleanup orbit settings
    */
   cleanup(): void {
+    if (this.orbitChangeDebounceTimer !== null) {
+      clearTimeout(this.orbitChangeDebounceTimer);
+      this.orbitChangeDebounceTimer = null;
+    }
+    this.doubleClickRemove?.();
+    this.simulationButton = null;
     this.stopSimulationLoop();
+    this.removeOrbitPostRender();
     this.stopCameraTracking();
     this.orbitPathManager?.clear();
     this.orbitPathManager = null;

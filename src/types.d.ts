@@ -305,8 +305,16 @@ declare namespace Cesium {
     function headingPitchRollQuaternion(position: Cartesian3, headingPitchRoll: HeadingPitchRoll, result?: Quaternion): Quaternion;
     function eastNorthUpToFixedFrame(origin: Cartesian3, ellipsoid?: any, result?: Matrix4): Matrix4;
   }
+  class Cartesian4 {
+    constructor(x?: number, y?: number, z?: number, w?: number);
+    x: number;
+    y: number;
+    z: number;
+    w: number;
+  }
   namespace Matrix4 {
     function multiplyByPoint(matrix: Matrix4, cartesian: Cartesian3, result?: Cartesian3): Cartesian3;
+    function getColumn(matrix: Matrix4, index: number, result: Cartesian4): Cartesian4;
   }
   class Matrix4 {
     constructor(column0Row0?: number, column1Row0?: number, column2Row0?: number, column3Row0?: number, column0Row1?: number, column1Row1?: number, column2Row1?: number, column3Row1?: number, column0Row2?: number, column1Row2?: number, column2Row2?: number, column3Row2?: number, column0Row3?: number, column1Row3?: number, column2Row3?: number, column3Row3?: number);

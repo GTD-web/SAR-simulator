@@ -253,14 +253,12 @@ export class ControlPanelManager {
       this.satelliteSettings.cancelCameraAnimation();
       this.satelliteSettings.ensureEntityExists();
     }
-    // 이미 추적 중이면 무시
-    if (this.orbitSettings?.isTracking()) return;
-    // 시뮬레이션 중이면 추적만 시작 (시뮬레이션 중지하지 않음)
+    // 시뮬레이션 중이면 위성으로 1회 줌 (추적 없음)
     if (this.orbitSettings?.isSimulationRunning()) {
-      this.orbitSettings.startTracking();
+      this.orbitSettings.zoomToSatelliteOnce();
       return;
     }
-    this.orbitSettings?.flyToOrbitPosition(false);
+    this.orbitSettings?.flyToOrbitPosition(false, true);
   }
 
   /**

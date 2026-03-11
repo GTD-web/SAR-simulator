@@ -408,7 +408,7 @@ export function renderSatelliteSettingsForm(
   const createButton = document.createElement('button');
   createButton.textContent = 'Create Satellite Entity (Space)';
   createButton.style.padding = '10px';
-  createButton.style.backgroundColor = '#4CAF50';
+  createButton.style.backgroundColor = '#9C27B0';
   createButton.style.color = 'white';
   createButton.style.border = 'none';
   createButton.style.borderRadius = '4px';

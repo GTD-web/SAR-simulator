@@ -158,8 +158,8 @@ export class SatelliteSettings {
         result.velocityEcef.z
       );
 
-      // 궤도 설정에 따라 TLE 궤도 그리기 (초기 접근 시 30분 궤도선만, 시뮬레이션 미시작)
-      this.orbitSettingsRef?.applyOrbitToSatellite(false, false);
+      // 궤도 설정에 따라 TLE 궤도 그리기 및 시뮬레이션 즉시 시작
+      this.orbitSettingsRef?.applyOrbitToSatellite(false, true);
 
       if (flyAfterCreate) {
         this.flyToOrbitAfterEntityRendered();

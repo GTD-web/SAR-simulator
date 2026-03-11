@@ -259,7 +259,7 @@ export class SignalVisualizationPanel {
     const scaleY = plotHeight / 2;
 
     // 실수부
-    ctx.strokeStyle = '#4CAF50';
+    ctx.strokeStyle = '#9C27B0';
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (let i = 0; i < numSamples; i++) {
@@ -339,12 +339,12 @@ export class SignalVisualizationPanel {
 
     // 범례
     const legendY = padding + 30;
-    ctx.strokeStyle = '#4CAF50';
+    ctx.strokeStyle = '#9C27B0';
     ctx.beginPath();
     ctx.moveTo(padding + 20, legendY);
     ctx.lineTo(padding + 50, legendY);
     ctx.stroke();
-    ctx.fillStyle = '#4CAF50';
+    ctx.fillStyle = '#9C27B0';
     ctx.font = '14px sans-serif';
     ctx.fillText('Real', padding + 55, legendY + 5);
 
@@ -529,7 +529,7 @@ export class SignalVisualizationPanel {
 
       // 실수부
       if (showReal) {
-        ctx.strokeStyle = '#4CAF50';
+        ctx.strokeStyle = '#9C27B0';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         for (let i = 0; i < numSamples; i++) {
@@ -599,12 +599,12 @@ export class SignalVisualizationPanel {
       // 범례
       const legendY = padding + 20;
       if (showReal) {
-        ctx.strokeStyle = '#4CAF50';
+        ctx.strokeStyle = '#9C27B0';
         ctx.beginPath();
         ctx.moveTo(padding + 10, legendY);
         ctx.lineTo(padding + 30, legendY);
         ctx.stroke();
-        ctx.fillStyle = '#4CAF50';
+        ctx.fillStyle = '#9C27B0';
         ctx.fillText('Real', padding + 35, legendY + 4);
       }
       if (showImag) {
@@ -773,7 +773,7 @@ export class SignalVisualizationPanel {
 
       // 실수부
       if (showReal) {
-        ctx.strokeStyle = '#4CAF50';
+        ctx.strokeStyle = '#9C27B0';
         ctx.lineWidth = 1;
         ctx.beginPath();
         for (let i = 0; i < numSamples; i++) {
@@ -857,12 +857,12 @@ export class SignalVisualizationPanel {
       // 범례
       const legendY = padding + 20;
       if (showReal) {
-        ctx.strokeStyle = '#4CAF50';
+        ctx.strokeStyle = '#9C27B0';
         ctx.beginPath();
         ctx.moveTo(padding + 10, legendY);
         ctx.lineTo(padding + 30, legendY);
         ctx.stroke();
-        ctx.fillStyle = '#4CAF50';
+        ctx.fillStyle = '#9C27B0';
         ctx.fillText('Real', padding + 35, legendY + 4);
       }
       if (showImag) {
@@ -1006,7 +1006,7 @@ export class SignalVisualizationPanel {
         'Time (μs)',
         'Amplitude',
         'Chirp Signal - Time Domain (With Carrier Frequency)',
-        '#4CAF50',
+        '#9C27B0',
         { min: Math.min(...tUs), max: Math.max(...tUs) }
       );
     });
@@ -1370,7 +1370,7 @@ export class SignalVisualizationPanel {
     const scaleY = plotHeight / yRange;
     const centerY = padding + plotHeight / 2;
 
-    ctx.strokeStyle = '#4CAF50';
+    ctx.strokeStyle = '#9C27B0';
     ctx.lineWidth = 2;
     ctx.beginPath();
     for (let i = 0; i < numSamples; i++) {
