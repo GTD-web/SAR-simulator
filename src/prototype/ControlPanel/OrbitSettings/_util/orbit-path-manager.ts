@@ -31,6 +31,7 @@ export class OrbitPathManager {
   private cachedCenterTimeMs: number | null = null;
   private cachedPositions: Cesium.Cartesian3[] = [];
   private cachedSatrec: Satrec | null = null;
+  private recalcScheduled = false;
 
   constructor(options: OrbitPathManagerOptions) {
     this.viewer = options.viewer;
@@ -74,15 +75,23 @@ export class OrbitPathManager {
           if (self.cachedCenterTimeMs !== null && diffSec < ORBIT_CACHE_THRESHOLD_SEC) {
             return self.cachedPositions;
           }
-          const positions = getOrbitPathPositionsFromSatrec(
-            self.cachedSatrec,
-            currentTime,
-            0.5,
-            2 / 60
-          );
-          if (positions.length > 0) {
-            self.cachedCenterTimeMs = currentMs;
-            self.cachedPositions = positions;
+          if (!self.recalcScheduled) {
+            self.recalcScheduled = true;
+            const satrec = self.cachedSatrec;
+            requestAnimationFrame(() => {
+              if (!satrec || !self.viewer) {
+                self.recalcScheduled = false;
+                return;
+              }
+              const t = self.viewer.clock.currentTime;
+              const positions = getOrbitPathPositionsFromSatrec(satrec, t, 0.5, 2 / 60);
+              if (positions.length > 0) {
+                self.cachedCenterTimeMs = Cesium.JulianDate.toDate(t).getTime();
+                self.cachedPositions = positions;
+              }
+              self.recalcScheduled = false;
+              self.viewer.scene.requestRender();
+            });
           }
           return self.cachedPositions;
         }, false),
@@ -106,5 +115,6 @@ export class OrbitPathManager {
     this.cachedCenterTimeMs = null;
     this.cachedPositions = [];
     this.cachedSatrec = null;
+    this.recalcScheduled = false;
   }
 }

@@ -227,7 +227,7 @@ export class OrbitSettings {
   }
 
   /**
-   * 궤도 설정 탭 진입 시 궤도선·위성 위치만 갱신 (카메라 이동 없음)
+   * 궤도 설정 탭 진입 시 (위성 위치·클럭·궤도선 변경 없음)
    */
   prepareOrbitTab(): void {
     if (!this.viewer) return;
@@ -235,43 +235,14 @@ export class OrbitSettings {
     this.stopSimulationLoop();
     this.simulationEnabled = false;
 
-    const parsed = this.getParsedForm();
-    const result = this.getOrbitPositionFromForm();
-    const busEntity = this.busPayloadManager?.getBusEntity();
-
-    if (result && this.busPayloadManager && busEntity) {
-      this.busPayloadManager.updatePosition({
-        longitude: result.longitude,
-        latitude: result.latitude,
-        altitude: result.altitude,
-      });
-      this.busPayloadManager.setVelocityDirectionEcef(
-        result.velocityEcef.x,
-        result.velocityEcef.y,
-        result.velocityEcef.z
+    if (this.cachedSatrec && this.viewer.clock) {
+      const pos = getPositionFromSatrec(
+        this.cachedSatrec,
+        this.viewer.clock.currentTime
       );
-    }
-
-    // Initial Time을 시뮬레이션 시작 시간으로 타임라인 설정
-    if (parsed && this.viewer.clock) {
-      const periodSeconds = calculateOrbitalPeriod(parsed.elements.semiMajorAxis) * 3600;
-      const startTime = parsed.epochTime;
-      const stopTime = Cesium.JulianDate.addSeconds(
-        parsed.epochTime,
-        2 * periodSeconds,
-        new Cesium.JulianDate()
-      );
-      this.viewer.clock.startTime = Cesium.JulianDate.addSeconds(startTime, 0, new Cesium.JulianDate());
-      this.viewer.clock.stopTime = Cesium.JulianDate.addSeconds(stopTime, 0, new Cesium.JulianDate());
-      this.viewer.clock.currentTime = Cesium.JulianDate.addSeconds(startTime, 0, new Cesium.JulianDate());
-      if (this.viewer.timeline) {
-        this.viewer.timeline.zoomTo(startTime, stopTime);
+      if (pos) {
+        this.updatePassDirectionDisplay(pos.passDirection);
       }
-    }
-
-    this.drawOrbitPath();
-    if (result) {
-      this.updatePassDirectionDisplay(result.passDirection);
     }
   }
 
