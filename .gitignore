@@ -49,6 +49,7 @@ desktop.ini
 # 빌드/배포
 build/
 dist/
+*.tsbuildinfo
 *.egg-info
 
 # 데이터베이스 파일

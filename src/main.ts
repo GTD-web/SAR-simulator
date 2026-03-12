@@ -7,9 +7,12 @@ import { createRequire } from 'module';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// 개발 시 클라이언트/메인 코드 변경 시 자동 리로드
+// 개발 시 클라이언트(렌더러) 변경 시 창만 새로고침 (앱 전체 재시작 없음)
+// main.js, preload.js 변경 시에는 수동으로 앱 재시작 필요
 const require = createRequire(import.meta.url);
-require('electron-reload')(__dirname);
+require('electron-reload')(__dirname, {
+  forceHardReset: false,
+});
 
 // datetime-local 등 네이티브 date picker를 영어(AM/PM)로 표시
 app.commandLine.appendSwitch('lang', 'en-US');

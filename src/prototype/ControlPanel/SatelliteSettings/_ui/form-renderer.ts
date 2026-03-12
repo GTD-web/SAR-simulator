@@ -23,7 +23,7 @@ export function renderSatelliteSettingsForm(
   callbacks: FormRendererCallbacks
 ): void {
   const section = document.createElement('div');
-  section.className = 'sidebar-section';
+  section.className = 'sidebar-section satellite-settings';
 
   // Satellite settings form
   const form = document.createElement('div');
@@ -408,8 +408,8 @@ export function renderSatelliteSettingsForm(
   const createButton = document.createElement('button');
   createButton.textContent = 'Create Satellite Entity (Space)';
   createButton.style.padding = '10px';
-  createButton.style.backgroundColor = '#9C27B0';
-  createButton.style.color = 'white';
+  createButton.style.backgroundColor = 'var(--lilac)';
+  createButton.style.color = 'var(--dark-amethyst)';
   createButton.style.border = 'none';
   createButton.style.borderRadius = '4px';
   createButton.style.cursor = 'pointer';
@@ -426,6 +426,7 @@ export function renderSatelliteSettingsForm(
   axisToggleLabel.style.gap = '8px';
   axisToggleLabel.style.marginTop = '10px';
   axisToggleLabel.style.cursor = 'pointer';
+  axisToggleLabel.style.color = 'var(--pink-orchid)';
 
   const axisToggle = document.createElement('input');
   axisToggle.type = 'checkbox';

@@ -77,7 +77,7 @@ export class ControlPanelManager {
     const satelliteTabButton = document.createElement('button');
     satelliteTabButton.className = 'tab-button active';
     satelliteTabButton.setAttribute('data-tab', 'satellite');
-    satelliteTabButton.textContent = 'Satellite';
+    satelliteTabButton.textContent = 'Satellite1';
     tabButtons.appendChild(satelliteTabButton);
 
     // 궤도 설정 탭 버튼

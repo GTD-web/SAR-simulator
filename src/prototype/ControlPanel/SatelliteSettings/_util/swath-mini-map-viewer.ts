@@ -53,11 +53,11 @@ export class SwathMiniMapViewer {
       width: ${MINI_MAP_SIZE}px;
       height: ${MINI_MAP_SIZE}px;
       z-index: 1000;
-      border: 2px solid rgba(255, 255, 255, 0.5);
+      border: 2px solid var(--dusty-grape);
       border-radius: 6px;
       overflow: hidden;
       box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
-      background: rgba(20, 20, 20, 0.9);
+      background: color-mix(in srgb, var(--dark-amethyst) 95%, transparent);
     `;
 
     const label = document.createElement('div');
@@ -68,7 +68,7 @@ export class SwathMiniMapViewer {
       top: 4px;
       left: 4px;
       font-size: 11px;
-      color: rgba(255, 255, 255, 0.9);
+      color: var(--pink-orchid);
       z-index: 10;
       pointer-events: none;
       text-shadow: 0 1px 2px rgba(0,0,0,0.8);

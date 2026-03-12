@@ -5,11 +5,11 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc && tsc -p tsconfig.preload.json && npm run copy:css",
-    "build:watch": "concurrently \"tsc --watch\" \"tsc -p tsconfig.preload.json --watch\" \"npm run copy:css:watch\"",
+    "build:watch": "concurrently -n tsc,preload,css -c blue,yellow,green \"tsc --watch\" \"tsc -p tsconfig.preload.json --watch\" \"node scripts/copy-css-watch.js\"",
     "copy:css": "node scripts/copy-css.js",
     "copy:css:watch": "node scripts/copy-css-watch.js",
     "start": "npm run build && electron .",
-    "dev": "npm run copy:css && concurrently \"npm run build:watch\" \"wait-on dist/main.js dist/preload.js dist/index.html dist/styles.css && electron .\"",
+    "dev": "npm run copy:css && concurrently -n build,electron -c blue,green \"npm run build:watch\" \"wait-on dist/main.js dist/preload.js dist/index.html dist/styles.css && electron .\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -21,6 +21,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.0.10",
+    "chokidar": "^5.0.0",
     "concurrently": "^9.1.2",
     "electron": "^40.0.0",
     "electron-builder": "^26.4.0",

@@ -9,13 +9,13 @@ export function createSection(title: string): HTMLElement {
   const section = document.createElement('div');
   section.style.marginTop = '20px';
   section.style.paddingTop = '15px';
-  section.style.borderTop = '1px solid #333';
+  section.style.borderTop = '1px solid var(--dusty-grape)';
 
   const sectionTitle = document.createElement('h4');
   sectionTitle.textContent = title;
   sectionTitle.style.marginBottom = '10px';
   sectionTitle.style.fontSize = '14px';
-  sectionTitle.style.color = '#ccc';
+  sectionTitle.style.color = 'var(--amethyst-smoke)';
   section.appendChild(sectionTitle);
 
   return section;
