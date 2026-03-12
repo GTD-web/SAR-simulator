@@ -372,6 +372,117 @@ const terrain = {
   }
 
   /**
+   * 화면 하단 카메라 이동 버튼 생성
+   */
+  private createCameraButtons(): void {
+    const existing = document.getElementById('cameraControlButtons');
+    if (existing) existing.remove();
+
+    const container = document.createElement('div');
+    container.id = 'cameraControlButtons';
+
+    const btnSatellite = document.createElement('button');
+    btnSatellite.id = 'btnFlyToSatellite';
+    btnSatellite.type = 'button';
+    btnSatellite.title = 'Fly to satellite';
+    btnSatellite.innerHTML = '<span class="cam-btn-icon satellite-icon"></span>Satellite';
+    btnSatellite.addEventListener('click', () => {
+      this.controlPanelManager?.flyToSatellite();
+    });
+
+    const btnEarth = document.createElement('button');
+    btnEarth.id = 'btnFlyToEarth';
+    btnEarth.type = 'button';
+    btnEarth.title = 'View whole Earth';
+    btnEarth.innerHTML = '<span class="cam-btn-icon earth-icon"></span>Earth';
+    btnEarth.addEventListener('click', () => {
+      this.controlPanelManager?.flyToEarth();
+    });
+
+    container.appendChild(btnSatellite);
+    container.appendChild(btnEarth);
+    document.body.appendChild(container);
+
+    this.injectCameraButtonStyles();
+  }
+
+  /**
+   * 하단 카메라 버튼 스타일 주입
+   */
+  private injectCameraButtonStyles(): void {
+    if (document.getElementById('cameraControlButtonsStyles')) return;
+    const style = document.createElement('style');
+    style.id = 'cameraControlButtonsStyles';
+    style.textContent = `
+      #cameraControlButtons {
+        position: fixed;
+        bottom: 40px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 10px;
+        z-index: 500;
+        pointer-events: none;
+      }
+      #cameraControlButtons button {
+        pointer-events: all;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 18px;
+        border: 1px solid var(--dusty-grape);
+        border-radius: 20px;
+        background: rgba(35, 25, 66, 0.82);
+        color: var(--pink-orchid);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        backdrop-filter: blur(6px);
+        transition: background 0.15s, color 0.15s, border-color 0.15s;
+        white-space: nowrap;
+      }
+      #cameraControlButtons button:hover {
+        background: var(--dusty-grape);
+        color: #fff;
+        border-color: var(--lilac);
+      }
+      #cameraControlButtons button:hover .cam-btn-icon {
+        background-color: #fff;
+      }
+      #cameraControlButtons button:active {
+        background: var(--dark-amethyst);
+        color: var(--lilac);
+      }
+      #cameraControlButtons button:active .cam-btn-icon {
+        background-color: var(--lilac);
+      }
+      .cam-btn-icon {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        flex-shrink: 0;
+        background-color: var(--pink-orchid);
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        transition: background-color 0.15s;
+      }
+      .satellite-icon {
+        -webkit-mask-image: url('assets/satellite-icon.svg');
+        mask-image: url('assets/satellite-icon.svg');
+      }
+      .earth-icon {
+        -webkit-mask-image: url('assets/earth-14-svgrepo-com.svg');
+        mask-image: url('assets/earth-14-svgrepo-com.svg');
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  /**
    * 지역 정보 수신 시 우측 패널 내용 갱신
    */
   updateRegionInfoPanel(regionInfo: RegionInfo): void {
@@ -537,7 +648,10 @@ const terrain = {
         regionInfoPanel: this.regionInfoPanel,
       });
 
-      // 7. 지도 우클릭 컨텍스트 메뉴 (경·위도 표시, 해당 위치로 타겟 설정)
+      // 7. 하단 카메라 이동 버튼
+      this.createCameraButtons();
+
+      // 8. 지도 우클릭 컨텍스트 메뉴 (경·위도 표시, 해당 위치로 타겟 설정)
       const canvas = this.viewer.scene.canvas;
       canvas.addEventListener('contextmenu', (e: Event) => e.preventDefault());
       this.viewerManager.setupMapRightClickHandler((lon, lat, x, y) => {
@@ -582,6 +696,10 @@ const terrain = {
     this.regionInfoPanel = null;
     const styleEl = document.getElementById('targetGeoDataSidebarStyles');
     if (styleEl) styleEl.remove();
+
+    // 하단 카메라 버튼 제거
+    document.getElementById('cameraControlButtons')?.remove();
+    document.getElementById('cameraControlButtonsStyles')?.remove();
 
     // Cesium 뷰어 정리
     if (this.viewer) {

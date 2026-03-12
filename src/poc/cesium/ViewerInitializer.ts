@@ -146,9 +146,9 @@ function setupEntityTracking(viewer: any): void {
   });
 }
 
-const ZOOM_MIN_M = 0.5;
-const ZOOM_MAX_M = 10_000_000;
-const ZOOM_FACTOR = 0.00005;
+const ZOOM_MIN_M = 1_000; // 1.0km
+const ZOOM_MAX_M = 20_000_000;
+const ZOOM_FACTOR = 0.00008;
 
 /**
  * wheel 줌 핸들러 - moveForward/moveBackward로 거리만 변경

@@ -234,9 +234,27 @@ export class ControlPanelManager {
   }
 
   /**
+   * 위성 위치로 카메라 이동 + 추적 설정
+   */
+  flyToSatellite(): void {
+    if (!this.orbitSettings || !this.viewer) {
+      console.warn('[ControlPanelManager] flyToSatellite: orbitSettings 또는 viewer 없음');
+      return;
+    }
+
+    // entity가 없으면 기본 위치에 먼저 생성
+    const busPayloadManager = this.satelliteSettings?.getBusPayloadManager();
+    if (!busPayloadManager?.getBusEntity()) {
+      this.satelliteSettings?.ensureEntityExists();
+    }
+
+    this.orbitSettings.zoomToSatelliteAndTrack();
+  }
+
+  /**
    * 지구로 카메라 이동
    */
-  private flyToEarth(): void {
+  flyToEarth(): void {
     if (!this.viewer) {
       return;
     }

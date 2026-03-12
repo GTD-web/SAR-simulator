@@ -191,7 +191,8 @@ export function zoomToEntityAndTrack(
   entity: any,
   cameraRange?: number,
   duration?: number,
-  setTrackedEntity = true
+  setTrackedEntity = true,
+  pitchDegrees?: number
 ): void {
   if (!viewer || !entity) return;
   if (viewer.camera._flight && viewer.camera._flight.isActive()) {
@@ -199,7 +200,8 @@ export function zoomToEntityAndTrack(
   }
   viewer.trackedEntity = undefined;
   const range = cameraRange ?? calculateCameraRange();
-  const pitch = cameraRange != null ? CAMERA.ORBIT_TRACK_PITCH_DEGREES : CAMERA.PITCH_DEGREES;
+  const defaultPitch = cameraRange != null ? CAMERA.ORBIT_TRACK_PITCH_DEGREES : CAMERA.PITCH_DEGREES;
+  const pitch = pitchDegrees ?? defaultPitch;
   const offset = new Cesium.HeadingPitchRange(
     Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
     Cesium.Math.toRadians(pitch),

@@ -454,22 +454,58 @@ export class OrbitSettings {
   }
 
   /**
-   * 위성으로 카메라 이동 + 추적 (시뮬레이션 유지, 카메라가 위성 움직임 추적)
-   */
-  /**
-   * Fly to Satellite 버튼: 현재 위성 위치로 카메라 이동 후 위성 추적
+   * Fly to Satellite 버튼: 위성 바로 위에서 수직 하향(-90°) 뷰로 카메라 이동 후 추적
+   * viewer.zoomTo 대신 camera.flyTo 직접 사용 → bounding sphere 계산 불필요
    */
   zoomToSatelliteAndTrack(): void {
     const busEntity = this.busPayloadManager?.getBusEntity();
-    if (!busEntity || !this.viewer) return;
+    if (!busEntity || !this.viewer) {
+      console.warn('[OrbitSettings] zoomToSatelliteAndTrack: busEntity 또는 viewer 없음');
+      return;
+    }
 
-    zoomToEntityAndTrack(
-      this.viewer,
-      busEntity,
-      CAMERA.FLY_TO_SATELLITE_RANGE,
-      1,
-      true
+    const currentTime = this.viewer.clock.currentTime;
+    const entityPos = busEntity.position?.getValue(currentTime);
+    if (!entityPos) {
+      console.warn('[OrbitSettings] zoomToSatelliteAndTrack: entity position 없음');
+      return;
+    }
+
+    if (this.viewer.camera._flight && this.viewer.camera._flight.isActive()) {
+      this.viewer.camera.cancelFlight();
+    }
+
+    const range = CAMERA.FLY_TO_SATELLITE_RANGE;
+    // 지구 반경 방향(위쪽) 단위벡터
+    const radialUp = Cesium.Cartesian3.normalize(entityPos, new Cesium.Cartesian3());
+    // 카메라 위치: entity 바로 위
+    const camPos = Cesium.Cartesian3.add(
+      entityPos,
+      Cesium.Cartesian3.multiplyByScalar(radialUp, range, new Cesium.Cartesian3()),
+      new Cesium.Cartesian3()
     );
+    // 카메라 direction: 아래를 향함(-radialUp)
+    const direction = Cesium.Cartesian3.negate(radialUp, new Cesium.Cartesian3());
+    // 카메라 up: North 방향 (Z축과 radialUp의 cross product로 East를 구한 뒤 North 계산)
+    const zAxis = new Cesium.Cartesian3(0, 0, 1);
+    let east = Cesium.Cartesian3.cross(zAxis, radialUp, new Cesium.Cartesian3());
+    if (Cesium.Cartesian3.magnitude(east) < 1e-6) {
+      // 극지방 예외: X축 사용
+      east = new Cesium.Cartesian3(1, 0, 0);
+    }
+    Cesium.Cartesian3.normalize(east, east);
+    const northWC = Cesium.Cartesian3.cross(radialUp, east, new Cesium.Cartesian3());
+    Cesium.Cartesian3.normalize(northWC, northWC);
+
+    this.viewer.camera.setView({
+      destination: camPos,
+      orientation: { direction, up: northWC },
+    });
+
+    // 추적 설정 (_trackingTarget은 ViewerInitializer preRender에서 처리)
+    this.viewer._trackingTarget = busEntity;
+    this.viewer.scene.screenSpaceCameraController.maximumZoomDistance =
+      CAMERA.MAX_ZOOM_DISTANCE_WHEN_TRACKING;
   }
 
   /** 시뮬레이션(clock 재생)이 실행 중인지 */

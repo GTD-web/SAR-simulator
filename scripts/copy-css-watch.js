@@ -10,10 +10,20 @@ const srcCssFile = path.join(__dirname, '../src/styles.css');
 const destCssFile = path.join(__dirname, '../dist/styles.css');
 const srcHtmlFile = path.join(__dirname, '../index.html');
 const destHtmlFile = path.join(__dirname, '../dist/index.html');
+const srcAssetsDir = path.join(__dirname, '../src/assets');
+const destAssetsDir = path.join(__dirname, '../dist/assets');
 
 const DEBOUNCE_MS = 100;
 
 let copyTimeout = null;
+
+function copyAssets() {
+  if (!fs.existsSync(srcAssetsDir)) return;
+  if (!fs.existsSync(destAssetsDir)) fs.mkdirSync(destAssetsDir, { recursive: true });
+  for (const file of fs.readdirSync(srcAssetsDir)) {
+    fs.copyFileSync(path.join(srcAssetsDir, file), path.join(destAssetsDir, file));
+  }
+}
 
 function copyFiles() {
   try {
@@ -25,6 +35,7 @@ function copyFiles() {
       fs.copyFileSync(srcHtmlFile, destHtmlFile);
       console.log('✓ HTML 파일 복사 완료:', new Date().toLocaleTimeString());
     }
+    copyAssets();
   } catch (error) {
     console.error('✗ 파일 복사 실패:', error.message);
   }
