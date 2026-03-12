@@ -103,6 +103,78 @@
     // App 인스턴스 생성 및 초기화 (프로토타입 화면으로 바로 로드)
     const app = new App();
     app.initialize();
+
+    // 탭 전환 기능
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const targetTab = button.getAttribute('data-tab');
+        
+        // 모든 탭 버튼과 콘텐츠에서 active 클래스 제거
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+        
+        // 클릭한 탭 버튼과 해당 콘텐츠에 active 클래스 추가
+        button.classList.add('active');
+        const targetContent = document.getElementById(targetTab + 'Tab');
+        if (targetContent) {
+          targetContent.classList.add('active');
+        }
+      });
+    });
+
+    // 위성 생성 모드 전환
+    const satelliteModeSelect = document.getElementById('satelliteMode');
+    const positionVelocityInput = document.getElementById('positionVelocityInput');
+    const tleInput = document.getElementById('tleInput');
+    
+    if (satelliteModeSelect && positionVelocityInput && tleInput) {
+      satelliteModeSelect.addEventListener('change', () => {
+        const mode = satelliteModeSelect.value;
+        if (mode === 'position_velocity') {
+          positionVelocityInput.style.display = 'block';
+          tleInput.style.display = 'none';
+        } else {
+          positionVelocityInput.style.display = 'none';
+          tleInput.style.display = 'block';
+        }
+      });
+    }
+// ==================== [수치 기억하기: 절대 방어 버전] ====================
+    // 1. 사용자가 새로고침(F5)을 누르는 '바로 그 순간' 화면의 모든 값을 금고에 싹 다 저장!
+    window.addEventListener('beforeunload', () => {
+      const inputs = document.querySelectorAll('#sidebarContent input, #sidebarContent select, #sidebarContent textarea');
+      inputs.forEach(input => {
+        if (input.id) {
+          const valueToSave = input.type === 'checkbox' ? input.checked : input.value;
+          localStorage.setItem('sar_sim_final_' + input.id, valueToSave);
+        }
+      });
+    });
+
+    // 2. 새로고침 후, App.js가 기본값 세팅을 다 끝낼 때까지 1.5초(1500ms) 기다렸다가 기습 덮어쓰기!
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('#sidebarContent input, #sidebarContent select, #sidebarContent textarea');
+      inputs.forEach(input => {
+        if (!input.id) return;
+        
+        const savedValue = localStorage.getItem('sar_sim_final_' + input.id);
+        if (savedValue !== null) {
+          if (input.type === 'checkbox') {
+            input.checked = (savedValue === 'true');
+          } else {
+            input.value = savedValue;
+          }
+          // 시뮬레이터 본체에게 "야! 나 값 바꿨어 작동해!" 라고 강제로 신호 보내기
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    }, 1500); // 1.5초 대기
+    // =========================================================================
+  
   </script>
 </body>
 </html>

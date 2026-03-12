@@ -231,9 +231,17 @@ export class PrototypePage {
     } = regionInfo;
     const grid = (elevationGrid ?? []).map((p) => ({
       longitude: p.longitude_deg,
-      latitude: p.latitude_deg,
+      latitude: p.latitude_deg, 
       elevation: p.height_m,
     }));
+
+    // [추가된 정렬 로직] 위도 > 위에서 아래로(위도 내림차순), 경도 > 좌에서 우로(경도 오름차순)
+    grid.sort((a, b) => {
+      if (Math.abs(b.latitude - a.latitude) > 1e-7) {
+        return b.latitude - a.latitude;
+      }
+      return a.longitude - b.longitude;
+    });
     const heights = grid.map((g) => g.elevation);
     const std_deviation = heights.length > 0 ? calculateStdDev(heights) : 0;
     const statistics =
@@ -276,20 +284,28 @@ export class PrototypePage {
         ? `${(lonSpanKm / (rc - 1)).toFixed(2)}km x ${(latSpanKm / (ac - 1)).toFixed(2)}km`
         : 'variable';
 
-    const terrain = {
-      type: 'DEM',
-      source: 'Cesium World Terrain',
-      resolution: resolutionKm,
-      bounds,
-      areaKm2,
-      grid,
-      rangeCount: rc,
-      azimuthCount: ac,
-      gridSize: { rows: ac, cols: rc },
-      statistics,
-      slope_map,
-      aspect_map,
-    };
+// [추가된 계층 구조 로직] 1차원 grid를 가로 한 줄(rangeCount) 크기만큼씩 잘라서 2차원 배열로 묶기
+const grid2D = [];
+if (rc > 0) {
+  for (let i = 0; i < grid.length; i += rc) {
+    grid2D.push(grid.slice(i, i + rc));
+  }
+}
+
+const terrain = {
+  type: 'DEM',
+  source: 'Cesium World Terrain',
+  resolution: resolutionKm,
+  bounds,
+  areaKm2,
+  grid: grid2D, // <-- 기존의 1차원(grid) 대신 2차원 계층 구조(grid2D)를 주입!
+  rangeCount: rc,
+  azimuthCount: ac,
+  gridSize: { rows: ac, cols: rc },
+  statistics,
+  slope_map,
+  aspect_map,
+};
 
     const geology =
       elevationGrid &&
