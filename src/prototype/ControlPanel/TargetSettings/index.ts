@@ -5,12 +5,17 @@ import {
 } from './_util/sar-target-calculator.js';
 import {
   computeGridCornersLonLat,
-  computeGridCenterLonLat,
   computeAllGridPointsLonLat,
 } from './_util/sar-grid-to-cesium.js';
 import { fetchBuildingsFromOverpass } from './_util/overpass-buildings.js';
 import { addTerrainElevationToBuildings } from './_util/sar-region-payload.js';
 import { restoreZoomDistance } from '../SatelliteSettings/_util/camera-manager.js';
+import type { SatelliteBusPayloadManager } from '../SatelliteSettings/SatelliteBusPayloadManager/index.js';
+
+/** swath 크기 (km) — prototype-swath-preview.ts의 SWATH_SPACING_M = 5000과 동일 */
+const SWATH_KM = 5.0;
+/** postRender sync 최소 간격 (ms) */
+const SYNC_THROTTLE_MS = 500;
 
 /** DEM 격자 한 점 (SAR 지오코딩용) */
 export interface ElevationGridPoint {
@@ -49,6 +54,8 @@ export interface RegionInfo {
 
 export interface TargetSettingsOptions {
   onRegionInfoFetched?: (data: RegionInfo) => void;
+  /** 위성 swath 연동용 busPayloadManager */
+  busPayloadManager?: SatelliteBusPayloadManager | null;
 }
 
 /**
@@ -57,22 +64,24 @@ export interface TargetSettingsOptions {
 export class TargetSettings {
   private container: HTMLElement | null;
   private viewer: any;
-  private target_footprint_entity: any;
   private grid_point_entities: any[];
-  private direction_entities: any[];
   private update_debounce_timer: number | null;
   private on_region_info_fetched: ((data: RegionInfo) => void) | null;
   private fetch_region_info_button: HTMLButtonElement | null;
+  private bus_payload_manager: SatelliteBusPayloadManager | null;
+  private post_render_remove: (() => void) | null;
+  private sync_throttle_last_ms: number;
 
   constructor() {
     this.container = null;
     this.viewer = null;
-    this.target_footprint_entity = null;
     this.grid_point_entities = [];
-    this.direction_entities = [];
     this.update_debounce_timer = null;
     this.on_region_info_fetched = null;
     this.fetch_region_info_button = null;
+    this.bus_payload_manager = null;
+    this.post_render_remove = null;
+    this.sync_throttle_last_ms = 0;
   }
 
   /**
@@ -82,8 +91,11 @@ export class TargetSettings {
     this.container = container;
     this.viewer = viewer || null;
     this.on_region_info_fetched = options?.onRegionInfoFetched ?? null;
+    this.bus_payload_manager = options?.busPayloadManager ?? null;
     this.render();
     if (this.viewer) {
+      this.setupSwathSync();
+      this.updateSpacings();
       this.updateTargetDebounced();
     }
   }
@@ -97,128 +109,43 @@ export class TargetSettings {
     const section = document.createElement('div');
     section.className = 'sidebar-section';
 
-    const title = document.createElement('h3');
-    title.textContent = 'Target Settings';
-    section.appendChild(title);
-
-    const description = document.createElement('p');
-    description.style.color = '#aaa';
-    description.style.fontSize = '12px';
-    description.style.marginTop = '10px';
-    description.textContent = 'Manage target-related settings.';
-    section.appendChild(description);
-
     // Target settings form
     const form = document.createElement('div');
-    form.style.marginTop = '15px';
+    form.style.marginTop = '4px';
 
-    // Target name input
-    const nameLabel = document.createElement('label');
-    nameLabel.textContent = 'Target Name:';
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.id = 'prototypeTargetName';
-    nameInput.placeholder = 'Enter target name';
-    nameInput.style.width = '100%';
-    nameInput.style.marginTop = '4px';
-    nameLabel.appendChild(nameInput);
-    form.appendChild(nameLabel);
-
-    // Target longitude input
-    const longitudeLabel = document.createElement('label');
-    longitudeLabel.style.marginTop = '10px';
-    longitudeLabel.style.display = 'block';
-    longitudeLabel.textContent = 'Longitude (deg):';
-    const longitudeInput = document.createElement('input');
-    longitudeInput.type = 'number';
-    longitudeInput.id = 'prototypeTargetLongitude';
-    longitudeInput.value = '127.0';
-    longitudeInput.min = '-180';
-    longitudeInput.max = '180';
-    longitudeInput.step = '0.0001';
-    longitudeInput.style.width = '100%';
-    longitudeInput.style.marginTop = '4px';
-    longitudeLabel.appendChild(longitudeInput);
-    form.appendChild(longitudeLabel);
-
-    // Target latitude input
-    const latitudeLabel = document.createElement('label');
-    latitudeLabel.style.marginTop = '10px';
-    latitudeLabel.style.display = 'block';
-    latitudeLabel.textContent = 'Latitude (deg):';
-    const latitudeInput = document.createElement('input');
-    latitudeInput.type = 'number';
-    latitudeInput.id = 'prototypeTargetLatitude';
-    latitudeInput.value = '37.5';
-    latitudeInput.min = '-90';
-    latitudeInput.max = '90';
-    latitudeInput.step = '0.0001';
-    latitudeInput.style.width = '100%';
-    latitudeInput.style.marginTop = '4px';
-    latitudeLabel.appendChild(latitudeInput);
-    form.appendChild(latitudeLabel);
-
-    // Target altitude input
-    const altitudeLabel = document.createElement('label');
-    altitudeLabel.style.marginTop = '10px';
-    altitudeLabel.style.display = 'block';
-    altitudeLabel.textContent = 'Altitude (m):';
-    const altitudeInput = document.createElement('input');
-    altitudeInput.type = 'number';
-    altitudeInput.id = 'prototypeTargetAltitude';
-    altitudeInput.value = '0';
-    altitudeInput.min = '0';
-    altitudeInput.step = '1';
-    altitudeInput.style.width = '100%';
-    altitudeInput.style.marginTop = '4px';
-    altitudeLabel.appendChild(altitudeInput);
-    form.appendChild(altitudeLabel);
+    // 위성 swath 동기화 정보 (읽기 전용)
+    this.createReadonlyField(form, 'Longitude (deg):', 'prototypeTargetLongitude', '—');
+    this.createReadonlyField(form, 'Latitude (deg):', 'prototypeTargetLatitude', '—');
+    this.createReadonlyField(form, 'Heading (deg):', 'prototypeTargetAlongTrackHeading', '—');
 
     // SAR 타겟 파라미터 섹션
     const sar_section = document.createElement('div');
-    sar_section.style.marginTop = '20px';
-    sar_section.style.paddingTop = '15px';
+    sar_section.style.marginTop = '16px';
+    sar_section.style.paddingTop = '12px';
     sar_section.style.borderTop = '1px solid #333';
     const sar_title = document.createElement('h4');
-    sar_title.textContent = 'SAR Target Parameters';
+    sar_title.textContent = 'SAR Grid Parameters';
     sar_title.style.marginBottom = '10px';
     sar_title.style.fontSize = '14px';
     sar_title.style.color = '#ccc';
     sar_section.appendChild(sar_title);
-
-    // Along-track 방위각 (deg)
-    this.createInputField(
-      sar_section,
-      'Along-track Heading (deg, 0=North 90=East):',
-      'prototypeTargetAlongTrackHeading',
-      '90',
-      '-180',
-      '180',
-      '1'
-    );
     form.appendChild(sar_section);
 
-    // Range
-    const range_title = document.createElement('h5');
-    range_title.textContent = 'Range (Cross-track)';
-    range_title.style.marginTop = '12px';
-    range_title.style.fontSize = '12px';
-    range_title.style.color = '#aaa';
-    sar_section.appendChild(range_title);
     this.createInputField(sar_section, 'Range Count:', 'prototypeTargetRangeCount', '8', '1', '10000', '1');
-    this.createInputField(sar_section, 'Range Spacing (km):', 'prototypeTargetRangeSpacing', '1.5', '0', '1000', '0.1');
-    this.createInputField(sar_section, 'Range Offset (km):', 'prototypeTargetRangeOffset', '0', '-1000', '1000', '0.1');
-
-    // Azimuth
-    const azimuth_title = document.createElement('h5');
-    azimuth_title.textContent = 'Azimuth (Along-track)';
-    azimuth_title.style.marginTop = '12px';
-    azimuth_title.style.fontSize = '12px';
-    azimuth_title.style.color = '#aaa';
-    sar_section.appendChild(azimuth_title);
+    this.createReadonlyField(sar_section, 'Range Spacing (km):', 'prototypeTargetRangeSpacing', `${(SWATH_KM / 7).toFixed(4)}`);
+    this.createReadonlyField(sar_section, 'Range Offset (km):', 'prototypeTargetRangeOffset', `${(-SWATH_KM / 2).toFixed(4)}`);
     this.createInputField(sar_section, 'Azimuth Count:', 'prototypeTargetAzimuthCount', '9', '1', '10000', '1');
-    this.createInputField(sar_section, 'Azimuth Spacing (km):', 'prototypeTargetAzimuthSpacing', '1.5', '0', '1000', '0.1');
-    this.createInputField(sar_section, 'Azimuth Offset (km):', 'prototypeTargetAzimuthOffset', '0', '-1000', '1000', '0.1');
+    this.createReadonlyField(sar_section, 'Azimuth Spacing (km):', 'prototypeTargetAzimuthSpacing', `${(SWATH_KM / 8).toFixed(4)}`);
+    this.createReadonlyField(sar_section, 'Azimuth Offset (km):', 'prototypeTargetAzimuthOffset', `${(-SWATH_KM / 2).toFixed(4)}`);
+
+    // 격자점 크기
+    const display_title = document.createElement('h5');
+    display_title.textContent = 'Display';
+    display_title.style.marginTop = '12px';
+    display_title.style.fontSize = '12px';
+    display_title.style.color = '#aaa';
+    sar_section.appendChild(display_title);
+    this.createInputField(sar_section, 'Point Size (px):', 'prototypeTargetPointSize', '6', '1', '50', '1');
 
     // 요약 (읽기 전용)
     const summary_title = document.createElement('h5');
@@ -256,17 +183,21 @@ export class TargetSettings {
     section.appendChild(form);
     this.container.appendChild(section);
 
-    // 입력 변경 시 요약 갱신 + Cesium 디바운스
+    // Count 변경 시 spacing 자동 재계산
+    const count_ids = ['prototypeTargetRangeCount', 'prototypeTargetAzimuthCount'];
+    count_ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', () => this.updateSpacings());
+        el.addEventListener('change', () => this.updateSpacings());
+      }
+    });
+
+    // 입력 변경 시 요약 갱신 + Cesium 디바운스 (readonly 필드 제외)
     const input_ids = [
-      'prototypeTargetLongitude',
-      'prototypeTargetLatitude',
-      'prototypeTargetAlongTrackHeading',
       'prototypeTargetRangeCount',
-      'prototypeTargetRangeSpacing',
-      'prototypeTargetRangeOffset',
       'prototypeTargetAzimuthCount',
-      'prototypeTargetAzimuthSpacing',
-      'prototypeTargetAzimuthOffset',
+      'prototypeTargetPointSize',
     ];
     input_ids.forEach((id) => {
       const el = document.getElementById(id);
@@ -312,6 +243,120 @@ export class TargetSettings {
     return label;
   }
 
+  /** Swath에서 자동 계산되는 읽기 전용 입력 필드 생성 */
+  private createReadonlyField(
+    parent: HTMLElement,
+    label_text: string,
+    input_id: string,
+    initial_value: string
+  ): HTMLElement {
+    const label = document.createElement('label');
+    label.style.marginTop = '10px';
+    label.style.display = 'block';
+    label.textContent = label_text;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.id = input_id;
+    input.value = initial_value;
+    input.readOnly = true;
+    input.tabIndex = -1;
+    input.style.width = '100%';
+    input.style.marginTop = '4px';
+    input.style.padding = '4px';
+    input.style.opacity = '0.6';
+    input.style.cursor = 'not-allowed';
+    label.appendChild(input);
+    parent.appendChild(label);
+    return label;
+  }
+
+  /**
+   * Range/Azimuth Spacing을 swath 크기 기준으로 자동 계산하여 readonly 필드에 반영
+   * spacing = SWATH_KM / (count - 1), count=1일 때는 SWATH_KM
+   */
+  private updateSpacings(): void {
+    const range_count = parseInt(
+      (document.getElementById('prototypeTargetRangeCount') as HTMLInputElement)?.value || '8',
+      10
+    );
+    const azimuth_count = parseInt(
+      (document.getElementById('prototypeTargetAzimuthCount') as HTMLInputElement)?.value || '9',
+      10
+    );
+
+    const range_spacing = range_count > 1 ? SWATH_KM / (range_count - 1) : SWATH_KM;
+    const azimuth_spacing = azimuth_count > 1 ? SWATH_KM / (azimuth_count - 1) : SWATH_KM;
+
+    const range_el = document.getElementById('prototypeTargetRangeSpacing') as HTMLInputElement;
+    const azimuth_el = document.getElementById('prototypeTargetAzimuthSpacing') as HTMLInputElement;
+    if (range_el) range_el.value = range_spacing.toFixed(4);
+    if (azimuth_el) azimuth_el.value = azimuth_spacing.toFixed(4);
+
+    // swath 중심 기준 대칭 배치를 위해 offset = -SWATH_KM/2 고정
+    const range_offset_el = document.getElementById('prototypeTargetRangeOffset') as HTMLInputElement;
+    const azimuth_offset_el = document.getElementById('prototypeTargetAzimuthOffset') as HTMLInputElement;
+    const center_offset = (-SWATH_KM / 2).toFixed(4);
+    if (range_offset_el) range_offset_el.value = center_offset;
+    if (azimuth_offset_el) azimuth_offset_el.value = center_offset;
+
+    this.updateSummary();
+    this.updateTargetDebounced();
+  }
+
+  /**
+   * postRender 이벤트를 통해 위성 swath 중심 좌표와 heading을 AOI 필드에 실시간 동기화
+   */
+  private setupSwathSync(): void {
+    if (!this.viewer || !this.bus_payload_manager) return;
+
+    const remove = this.viewer.scene.postRender.addEventListener(() => {
+      const now = performance.now();
+      if (now - this.sync_throttle_last_ms < SYNC_THROTTLE_MS) return;
+      this.sync_throttle_last_ms = now;
+      this.syncFromSwath();
+    });
+
+    this.post_render_remove = remove;
+  }
+
+  /**
+   * 위성 swath 중심 좌표와 heading을 읽어 AOI 입력 필드에 반영
+   * 포커스 중인 필드는 덮어쓰지 않음
+   */
+  private syncFromSwath(): void {
+    if (!this.bus_payload_manager) return;
+
+    const ground_point = this.bus_payload_manager.getYAxisGroundPoint?.();
+    const pos = this.bus_payload_manager.getPositionForSwath?.();
+    if (!ground_point || !pos) return;
+
+    const lon_el = document.getElementById('prototypeTargetLongitude') as HTMLInputElement | null;
+    const lat_el = document.getElementById('prototypeTargetLatitude') as HTMLInputElement | null;
+    const heading_el = document.getElementById('prototypeTargetAlongTrackHeading') as HTMLInputElement | null;
+
+    let changed = false;
+    const lon_str = ground_point.longitude.toFixed(6);
+    const lat_str = ground_point.latitude.toFixed(6);
+    const heading_str = pos.heading.toFixed(2);
+
+    if (lon_el && document.activeElement !== lon_el && lon_el.value !== lon_str) {
+      lon_el.value = lon_str;
+      changed = true;
+    }
+    if (lat_el && document.activeElement !== lat_el && lat_el.value !== lat_str) {
+      lat_el.value = lat_str;
+      changed = true;
+    }
+    if (heading_el && document.activeElement !== heading_el && heading_el.value !== heading_str) {
+      heading_el.value = heading_str;
+      changed = true;
+    }
+
+    if (changed) {
+      this.updateSpacings(); // spacing/offset 표시 갱신 + summary + debounced draw
+    }
+  }
+
   private updateSummary(): void {
     const summary_el = document.getElementById('prototypeTargetSarSummary');
     if (!summary_el) return;
@@ -346,57 +391,47 @@ export class TargetSettings {
   private drawTargetFootprint(): void {
     if (!this.viewer) return;
     this.clearTargetEntities();
-    const center_lon = parseFloat((document.getElementById('prototypeTargetLongitude') as HTMLInputElement)?.value || '127');
-    const center_lat = parseFloat((document.getElementById('prototypeTargetLatitude') as HTMLInputElement)?.value || '37.5');
-    const heading_deg = parseFloat((document.getElementById('prototypeTargetAlongTrackHeading') as HTMLInputElement)?.value || '90');
+
+    // bus_payload_manager가 있으면 DOM 필드 대신 직접 위성 swath 위치를 읽어 타이밍 문제 방지
+    let center_lon: number;
+    let center_lat: number;
+    let heading_deg: number;
+
+    if (this.bus_payload_manager) {
+      const ground_point = this.bus_payload_manager.getYAxisGroundPoint?.();
+      const pos = this.bus_payload_manager.getPositionForSwath?.();
+      if (!ground_point || !pos) return; // 위성 위치 미확보 시 미표시
+      center_lon = ground_point.longitude;
+      center_lat = ground_point.latitude;
+      heading_deg = pos.heading;
+    } else {
+      center_lon = parseFloat((document.getElementById('prototypeTargetLongitude') as HTMLInputElement)?.value || '127');
+      center_lat = parseFloat((document.getElementById('prototypeTargetLatitude') as HTMLInputElement)?.value || '37.5');
+      heading_deg = parseFloat((document.getElementById('prototypeTargetAlongTrackHeading') as HTMLInputElement)?.value || '90');
+    }
+
+    const range_count = parseInt((document.getElementById('prototypeTargetRangeCount') as HTMLInputElement)?.value || '8', 10);
+    const azimuth_count = parseInt((document.getElementById('prototypeTargetAzimuthCount') as HTMLInputElement)?.value || '9', 10);
+    const range_spacing = range_count > 1 ? SWATH_KM / (range_count - 1) : SWATH_KM;
+    const azimuth_spacing = azimuth_count > 1 ? SWATH_KM / (azimuth_count - 1) : SWATH_KM;
+
     const range_params: SarRangeParams = {
-      count: parseInt((document.getElementById('prototypeTargetRangeCount') as HTMLInputElement)?.value || '8', 10),
-      spacing_km: parseFloat((document.getElementById('prototypeTargetRangeSpacing') as HTMLInputElement)?.value || '1.5'),
-      offset_km: parseFloat((document.getElementById('prototypeTargetRangeOffset') as HTMLInputElement)?.value || '0'),
+      count: range_count,
+      spacing_km: range_spacing,
+      offset_km: -SWATH_KM / 2, // swath 중심 기준 대칭 — 항상 고정
     };
     const azimuth_params: SarAzimuthParams = {
-      count: parseInt((document.getElementById('prototypeTargetAzimuthCount') as HTMLInputElement)?.value || '9', 10),
-      spacing_km: parseFloat((document.getElementById('prototypeTargetAzimuthSpacing') as HTMLInputElement)?.value || '1.5'),
-      offset_km: parseFloat((document.getElementById('prototypeTargetAzimuthOffset') as HTMLInputElement)?.value || '0'),
+      count: azimuth_count,
+      spacing_km: azimuth_spacing,
+      offset_km: -SWATH_KM / 2, // swath 중심 기준 대칭 — 항상 고정
     };
-    const corners = computeGridCornersLonLat(
-      center_lon,
-      center_lat,
-      heading_deg,
-      range_params,
-      azimuth_params
-    );
-    const positions = corners.map((c) =>
-      Cesium.Cartesian3.fromDegrees(c.longitude_deg, c.latitude_deg, 0)
-    );
-    const center_alt = parseFloat(
-      (document.getElementById('prototypeTargetAltitude') as HTMLInputElement)?.value || '0'
-    );
-    const grid_center = computeGridCenterLonLat(
-      center_lon,
-      center_lat,
-      heading_deg,
-      range_params,
-      azimuth_params
-    );
-    this.target_footprint_entity = this.viewer.entities.add({
-      name: 'SAR Target Region',
-      position: Cesium.Cartesian3.fromDegrees(
-        grid_center.longitude_deg,
-        grid_center.latitude_deg,
-        center_alt
-      ),
-      polygon: {
-        hierarchy: new Cesium.PolygonHierarchy(positions),
-        material: Cesium.Color.CYAN.withAlpha(0.25),
-        outline: true,
-        outlineColor: Cesium.Color.CYAN,
-        outlineWidth: 2,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-      },
-    });
 
-    // 격자점(픽셀) 표시
+    const point_size = parseInt(
+      (document.getElementById('prototypeTargetPointSize') as HTMLInputElement)?.value || '6',
+      10
+    );
+
+    // swath 내 격자점만 표시 (별도 폴리곤/방향선 없음)
     const grid_points = computeAllGridPointsLonLat(
       center_lon,
       center_lat,
@@ -406,13 +441,9 @@ export class TargetSettings {
     );
     for (const p of grid_points) {
       const entity = this.viewer.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(
-          p.longitude_deg,
-          p.latitude_deg,
-          0
-        ),
+        position: Cesium.Cartesian3.fromDegrees(p.longitude_deg, p.latitude_deg, 0),
         point: {
-          pixelSize: 6,
+          pixelSize: point_size,
           color: Cesium.Color.CYAN,
           outlineColor: Cesium.Color.WHITE,
           outlineWidth: 1,
@@ -421,108 +452,14 @@ export class TargetSettings {
       });
       this.grid_point_entities.push(entity);
     }
-
-    // Along-track / Cross-track 방향선 — 폴리곤 모서리(가장자리)에 배치
-    // corners 순서: [0]=(az_min,r_min), [1]=(az_max,r_min), [2]=(az_max,r_max), [3]=(az_min,r_max)
-    const c0 = corners[0];
-    const c1 = corners[1];
-    const c3 = corners[3];
-
-    const along_line = this.viewer.entities.add({
-      name: 'Along-track',
-      polyline: {
-        positions: Cesium.Cartesian3.fromDegreesArrayHeights([
-          c0.longitude_deg,
-          c0.latitude_deg,
-          center_alt,
-          c1.longitude_deg,
-          c1.latitude_deg,
-          center_alt,
-        ]),
-        width: 3,
-        material: Cesium.Color.YELLOW,
-        clampToGround: true,
-      },
-    });
-    this.direction_entities.push(along_line);
-
-    const cross_line = this.viewer.entities.add({
-      name: 'Cross-track',
-      polyline: {
-        positions: Cesium.Cartesian3.fromDegreesArrayHeights([
-          c0.longitude_deg,
-          c0.latitude_deg,
-          center_alt,
-          c3.longitude_deg,
-          c3.latitude_deg,
-          center_alt,
-        ]),
-        width: 3,
-        material: Cesium.Color.ORANGE,
-        clampToGround: true,
-      },
-    });
-    this.direction_entities.push(cross_line);
-
-    // 방향선 끝(모서리 방향)에 레이블 배치
-    const along_label = this.viewer.entities.add({
-      name: 'Along-track label',
-      position: Cesium.Cartesian3.fromDegrees(
-        c1.longitude_deg,
-        c1.latitude_deg,
-        center_alt
-      ),
-      label: {
-        text: 'Along-track',
-        font: '14px sans-serif',
-        fillColor: Cesium.Color.YELLOW,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 2,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
-        pixelOffset: new Cesium.Cartesian2(8, 0),
-      },
-    });
-    this.direction_entities.push(along_label);
-
-    const cross_label = this.viewer.entities.add({
-      name: 'Cross-track label',
-      position: Cesium.Cartesian3.fromDegrees(
-        c3.longitude_deg,
-        c3.latitude_deg,
-        center_alt
-      ),
-      label: {
-        text: 'Cross-track',
-        font: '14px sans-serif',
-        fillColor: Cesium.Color.ORANGE,
-        outlineColor: Cesium.Color.BLACK,
-        outlineWidth: 2,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        verticalOrigin: Cesium.VerticalOrigin.CENTER,
-        pixelOffset: new Cesium.Cartesian2(8, 0),
-      },
-    });
-    this.direction_entities.push(cross_label);
   }
 
   private clearTargetEntities(): void {
     if (this.viewer) {
-      if (this.target_footprint_entity) {
-        if (this.viewer.trackedEntity === this.target_footprint_entity) {
-          this.viewer.trackedEntity = undefined;
-        }
-        this.viewer.entities.remove(this.target_footprint_entity);
-        this.target_footprint_entity = null;
-      }
       for (const entity of this.grid_point_entities) {
         this.viewer.entities.remove(entity);
       }
       this.grid_point_entities.length = 0;
-      for (const entity of this.direction_entities) {
-        this.viewer.entities.remove(entity);
-      }
-      this.direction_entities.length = 0;
     }
   }
 
@@ -731,7 +668,6 @@ export class TargetSettings {
   flyToTarget(): void {
     if (!this.viewer) return;
     try {
-      // 타겟 엔티티가 없으면 먼저 그리기 (중심 엔티티 포함)
       this.drawTargetFootprint();
 
       if (this.viewer.camera._flight && this.viewer.camera._flight.isActive()) {
@@ -740,15 +676,15 @@ export class TargetSettings {
       this.viewer.trackedEntity = undefined;
       restoreZoomDistance(this.viewer);
 
-      // 폴리곤 엔티티의 position(그리드 중심)으로만 비행 (카메라 고정 없음)
-      if (this.target_footprint_entity) {
-        const pos = this.target_footprint_entity.position.getValue(Cesium.JulianDate.now());
-        if (pos) {
-          const radius = 80000; // 80km — 타겟 영역이 보이도록
-          const boundingSphere = new Cesium.BoundingSphere(pos, radius);
-          this.viewer.camera.flyToBoundingSphere(boundingSphere, { duration: 0 });
-        }
-      }
+      const center_lon = parseFloat(
+        (document.getElementById('prototypeTargetLongitude') as HTMLInputElement)?.value || '127'
+      );
+      const center_lat = parseFloat(
+        (document.getElementById('prototypeTargetLatitude') as HTMLInputElement)?.value || '37.5'
+      );
+      const pos = Cesium.Cartesian3.fromDegrees(center_lon, center_lat, 0);
+      const boundingSphere = new Cesium.BoundingSphere(pos, 80000);
+      this.viewer.camera.flyToBoundingSphere(boundingSphere, { duration: 0 });
     } catch (error) {
       console.error('[TargetSettings] 타겟으로 카메라 이동 오류:', error);
     }
@@ -775,9 +711,14 @@ export class TargetSettings {
       clearTimeout(this.update_debounce_timer);
       this.update_debounce_timer = null;
     }
+    if (typeof this.post_render_remove === 'function') {
+      this.post_render_remove();
+      this.post_render_remove = null;
+    }
     this.clearTargetEntities();
     this.fetch_region_info_button = null;
     this.on_region_info_fetched = null;
+    this.bus_payload_manager = null;
     if (this.container) {
       this.container.innerHTML = '';
     }

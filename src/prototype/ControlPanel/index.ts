@@ -132,6 +132,7 @@ export class ControlPanelManager {
 
     const targetOptions: TargetSettingsOptions = {
       onRegionInfoFetched: options?.onRegionInfoFetched ?? undefined,
+      busPayloadManager: this.satelliteSettings.getBusPayloadManager(),
     };
     this.targetSettings = new TargetSettings();
     this.targetSettings.initialize(targetTabContent, viewer, targetOptions);
