@@ -1,7 +1,7 @@
 import type { SatelliteBusPayloadManager } from '../SatelliteBusPayloadManager/index.js';
 import { createAxisEntities } from '../SatelliteBusPayloadManager/_ui/axis-creator.js';
 
-const MINI_MAP_SIZE = 240;
+const MINI_MAP_SIZE = 360;
 const DEFAULT_CAMERA_OFFSET_M = 3;
 
 /** 카메라 방향 가중치: above(-Z), behind(-X), left(-Y). 위에서 내려다보며 Z축이 화면 아래로 향함 */
@@ -95,7 +95,7 @@ export class AttitudeMiniMapViewer {
 
     const label = document.createElement('div');
     label.className = 'attitude-mini-map-label';
-    label.textContent = 'Attitude';
+    label.textContent = 'Orientation';
     label.style.cssText = `
       position: absolute;
       top: 4px;

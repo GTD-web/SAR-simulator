@@ -402,8 +402,8 @@ const terrain = {
     const btnSwath = document.createElement('button');
     btnSwath.id = 'btnFlyToSwath';
     btnSwath.type = 'button';
-    btnSwath.title = 'Fly to swath area';
-    btnSwath.innerHTML = '<span class="cam-btn-icon swath-icon"></span>Swath';
+    btnSwath.title = 'Fly to AOI';
+    btnSwath.innerHTML = '<span class="cam-btn-icon swath-icon"></span>AOI';
     btnSwath.addEventListener('click', () => {
       this.controlPanelManager?.flyToSwath();
     });
@@ -648,9 +648,27 @@ const terrain = {
       // 3. 건물 레이어 추가
       await this.viewerManager.addBuildings();
 
-      // 4. 카메라: 지구 중심으로 초기화 (컨트롤 가능)
+      // 4. 카메라: 한반도(127°E, 37°N) 중앙으로 초기화
       this.viewer.trackedEntity = undefined;
-      this.viewer.camera.flyHome(0);
+      const koreaCenter = Cesium.Cartesian3.fromDegrees(127, 37, 0);
+      const koreaHeight = 30_000_000;
+      const radialUp = Cesium.Cartesian3.normalize(koreaCenter, new Cesium.Cartesian3());
+      const camPos = Cesium.Cartesian3.add(
+        koreaCenter,
+        Cesium.Cartesian3.multiplyByScalar(radialUp, koreaHeight, new Cesium.Cartesian3()),
+        new Cesium.Cartesian3()
+      );
+      const direction = Cesium.Cartesian3.negate(radialUp, new Cesium.Cartesian3());
+      const zAxis = new Cesium.Cartesian3(0, 0, 1);
+      let east = Cesium.Cartesian3.cross(zAxis, radialUp, new Cesium.Cartesian3());
+      if (Cesium.Cartesian3.magnitude(east) < 1e-6) east = new Cesium.Cartesian3(1, 0, 0);
+      Cesium.Cartesian3.normalize(east, east);
+      const north = Cesium.Cartesian3.cross(radialUp, east, new Cesium.Cartesian3());
+      Cesium.Cartesian3.normalize(north, north);
+      this.viewer.camera.setView({
+        destination: camPos,
+        orientation: { direction, up: north },
+      });
 
       // 5. 우측 지역 정보 패널 생성 (초기 숨김)
       this.createRegionInfoPanel();

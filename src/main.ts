@@ -18,6 +18,9 @@ require('electron-reload')(__dirname, {
 app.commandLine.appendSwitch('lang', 'en-US');
 app.commandLine.appendSwitch('accept-lang', 'en-US,en');
 
+// 네이티브 alert/confirm 다이얼로그 제목 (기본값: package.json name)
+app.setName('Lumir SAR Simulator');
+
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow() {

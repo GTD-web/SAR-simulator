@@ -269,15 +269,33 @@ export class ControlPanelManager {
       this.viewer.trackedEntity = undefined;
       restoreZoomDistance(this.viewer);
 
-      // 지구로 카메라 이동 (즉시)
-      this.viewer.camera.flyHome(0);
+      // 지구 전체 보기 (한반도 중앙, 30,000km 고도)
+      const koreaCenter = Cesium.Cartesian3.fromDegrees(127, 37, 0);
+      const koreaHeight = 30_000_000;
+      const radialUp = Cesium.Cartesian3.normalize(koreaCenter, new Cesium.Cartesian3());
+      const camPos = Cesium.Cartesian3.add(
+        koreaCenter,
+        Cesium.Cartesian3.multiplyByScalar(radialUp, koreaHeight, new Cesium.Cartesian3()),
+        new Cesium.Cartesian3()
+      );
+      const direction = Cesium.Cartesian3.negate(radialUp, new Cesium.Cartesian3());
+      const zAxis = new Cesium.Cartesian3(0, 0, 1);
+      let east = Cesium.Cartesian3.cross(zAxis, radialUp, new Cesium.Cartesian3());
+      if (Cesium.Cartesian3.magnitude(east) < 1e-6) east = new Cesium.Cartesian3(1, 0, 0);
+      Cesium.Cartesian3.normalize(east, east);
+      const north = Cesium.Cartesian3.cross(radialUp, east, new Cesium.Cartesian3());
+      Cesium.Cartesian3.normalize(north, north);
+      this.viewer.camera.setView({
+        destination: camPos,
+        orientation: { direction, up: north },
+      });
     } catch (error) {
       console.error('[ControlPanelManager] 지구로 카메라 이동 오류:', error);
     }
   }
 
   /**
-   * Swath 영역으로 카메라 이동 (즉시, 수직 하향 뷰)
+   * AOI 영역으로 카메라 이동 (즉시, 수직 하향 뷰)
    */
   flyToSwath(): void {
     if (!this.viewer || !this.satelliteSettings) return;
