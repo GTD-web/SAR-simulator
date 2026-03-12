@@ -202,6 +202,52 @@ export function renderOrbitForm(
   }
   form.appendChild(applyButton);
 
+  // Generated TLE 섹션
+  const tleSection = document.createElement('div');
+  tleSection.style.marginTop = '16px';
+  tleSection.style.paddingTop = '12px';
+  tleSection.style.borderTop = '1px solid rgba(255,255,255,0.15)';
+  const tleLabel = document.createElement('label');
+  tleLabel.style.display = 'block';
+  tleLabel.style.marginBottom = '6px';
+  tleLabel.style.fontSize = '13px';
+  tleLabel.textContent = 'Generated TLE:';
+  tleSection.appendChild(tleLabel);
+  const tlePre = document.createElement('pre');
+  tlePre.id = 'prototypeOrbitTleDisplay';
+  tlePre.style.cssText = `
+    margin: 0 0 8px 0;
+    padding: 8px;
+    font-size: 11px;
+    font-family: monospace;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 4px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 120px;
+    overflow-y: auto;
+    color: var(--pink-orchid, #c9a0dc);
+  `;
+  tlePre.textContent = 'Enter orbit values and apply to generate TLE.';
+  tleSection.appendChild(tlePre);
+  const copyTleBtn = document.createElement('button');
+  copyTleBtn.type = 'button';
+  copyTleBtn.textContent = 'Copy TLE';
+  copyTleBtn.style.cssText = 'width: 100%; padding: 6px; cursor: pointer; font-size: 12px;';
+  copyTleBtn.addEventListener('click', () => {
+    const el = document.getElementById('prototypeOrbitTleDisplay');
+    const text = el?.textContent?.trim();
+    if (text && !text.startsWith('Enter orbit')) {
+      navigator.clipboard.writeText(text).then(
+        () => { copyTleBtn.textContent = 'Copied!'; setTimeout(() => { copyTleBtn.textContent = 'Copy TLE'; }, 1500); },
+        () => { copyTleBtn.textContent = 'Copy failed'; setTimeout(() => { copyTleBtn.textContent = 'Copy TLE'; }, 1500); }
+      );
+    }
+  });
+  tleSection.appendChild(copyTleBtn);
+  form.appendChild(tleSection);
+
   // 궤도 입력 변경 시 즉시 적용 (debounced는 OrbitSettings에서 처리)
   const orbitInputIds = [
     ORBIT_FORM_IDS.INITIAL_TIME,

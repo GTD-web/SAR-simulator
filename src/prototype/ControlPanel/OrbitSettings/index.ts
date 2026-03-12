@@ -137,8 +137,32 @@ export class OrbitSettings {
       });
     }
 
+    this.updateTleDisplay();
+
     // TLE 궤도·엔티티 그리기는 SatelliteSettings.createInitialEntityOnOrbit 완료 후
     // applyOrbitToSatellite 호출로 수행됨 (위성 설정·궤도 설정 폼 값 반영)
+  }
+
+  /**
+   * 현재 궤도 폼 값으로 TLE 생성 후 표시 영역 갱신
+   */
+  private updateTleDisplay(): void {
+    const el = this.container?.querySelector('#prototypeOrbitTleDisplay');
+    if (!el) return;
+
+    const parsed = this.getParsedForm();
+    if (!parsed) {
+      el.textContent = 'Enter valid orbit values to generate TLE.';
+      return;
+    }
+
+    const tle = orbitalElementsToTLE(
+      parsed.elements,
+      parsed.epochTime,
+      'Orbit6Elements',
+      99999
+    );
+    el.textContent = tle ?? 'Failed to generate TLE.';
   }
 
   /**
@@ -205,6 +229,7 @@ export class OrbitSettings {
     }
     this.orbitChangeDebounceTimer = window.setTimeout(() => {
       this.applyOrbitToSatellite(false, false);
+      this.updateTleDisplay();
       this.orbitChangeDebounceTimer = null;
     }, 400);
   }
@@ -231,6 +256,8 @@ export class OrbitSettings {
    */
   prepareOrbitTab(): void {
     if (!this.viewer) return;
+
+    this.updateTleDisplay();
 
     if (this.cachedSatrec && this.viewer.clock) {
       const pos = getPositionFromSatrec(
@@ -713,6 +740,7 @@ export class OrbitSettings {
       });
       console.log('[OrbitSettings] TLE 생성 완료:\n', this.currentTLE);
 
+      this.updateTleDisplay();
       this.simulationEnabled = startSimulation;
       this.drawOrbitPath();
 
