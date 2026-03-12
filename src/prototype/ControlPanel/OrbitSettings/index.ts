@@ -232,9 +232,6 @@ export class OrbitSettings {
   prepareOrbitTab(): void {
     if (!this.viewer) return;
 
-    this.stopSimulationLoop();
-    this.simulationEnabled = false;
-
     if (this.cachedSatrec && this.viewer.clock) {
       const pos = getPositionFromSatrec(
         this.cachedSatrec,
@@ -424,6 +421,7 @@ export class OrbitSettings {
   private stopTracking(): void {
     if (this.viewer) {
       this.viewer.trackedEntity = undefined;
+      this.viewer._trackingTarget = undefined;
       this.viewer.selectedEntity = undefined;
       restoreZoomDistance(this.viewer);
     }
@@ -497,11 +495,22 @@ export class OrbitSettings {
     /** 최소 이동량 (m) - 이보다 작은 변화는 무시하여 떨림 감소 (궤도 속도 ~7.5km/s이므로 0.5m로 부동소수점 노이즈만 필터) */
     const MIN_MOVE_M = 0.5;
     /** 스로틀: 클럭 정지 시 시각 변경 없으면 스킵, 재생 시 2프레임마다 업데이트 (멈춤 방지) */
+    let wasAnimating = false;
     this.postRenderHandler = () => {
       const satrec = this.cachedSatrec;
       if (!satrec || !this.busPayloadManager?.getBusEntity()) return;
       const currentTime = this.viewer.clock.currentTime;
       const isAnimating = this.viewer.clock.shouldAnimate;
+
+      // 재생 중 _trackingTarget이 해제되어 있으면 재설정 (Play 버튼, 탭 전환 후 재생 등 모든 경우 처리)
+      if (isAnimating) {
+        const busEntity = this.busPayloadManager?.getBusEntity();
+        if (busEntity && !this.viewer._trackingTarget) {
+          this.viewer._trackingTarget = busEntity;
+        }
+      }
+      wasAnimating = isAnimating;
+
       if (!isAnimating) {
         const currentMs = Cesium.JulianDate.toDate(currentTime).getTime();
         if (this.lastProcessedTimeMs !== null && this.lastProcessedTimeMs === currentMs) return;
@@ -583,6 +592,12 @@ export class OrbitSettings {
         pos.velocityEcef.y,
         pos.velocityEcef.z
       );
+    }
+
+    // 시뮬레이션 시작 시 위성 추적 설정
+    const busEntity = this.busPayloadManager?.getBusEntity();
+    if (busEntity && this.viewer._trackingTarget !== busEntity) {
+      this.viewer._trackingTarget = busEntity;
     }
 
     console.log('[OrbitSettings] 시뮬레이션 루프 시작 (TLE 기반)');
