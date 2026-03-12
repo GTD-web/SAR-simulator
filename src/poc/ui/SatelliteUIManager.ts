@@ -385,7 +385,7 @@ export class SatelliteUIManager {
       this.createSatelliteButton.disabled = true;
       this.satelliteCreationStatus.style.display = 'block';
       this.satelliteCreationStatus.textContent = '위성 생성 중...';
-      this.satelliteCreationStatus.style.color = '#4CAF50';
+      this.satelliteCreationStatus.style.color = '#9C27B0';
 
       // Backend API 호출
       const response = await createSatellite(position, velocity, missionLocation);
@@ -422,7 +422,7 @@ export class SatelliteUIManager {
 
         // 상태 표시 업데이트
         this.satelliteCreationStatus.textContent = `위성 생성 완료!\nHeading: ${response.mission_direction.heading.toFixed(2)}°`;
-        this.satelliteCreationStatus.style.color = '#4CAF50';
+        this.satelliteCreationStatus.style.color = '#9C27B0';
 
         // 예상 경로 제거 (위성 생성 시 궤도선 없애기)
         this.entityManager.removePredictedPath();
@@ -1466,7 +1466,7 @@ export class SatelliteUIManager {
     }
     this.tleMissionStatus.style.display = 'block';
     this.tleMissionStatus.textContent = '미션 위치 검색 중...';
-    this.tleMissionStatus.style.color = '#4CAF50';
+    this.tleMissionStatus.style.color = '#9C27B0';
 
     try {
       // 현재 시간부터 검색 시작
@@ -1590,7 +1590,7 @@ export class SatelliteUIManager {
         `가장 가까운 시점: ${missionDate.toLocaleString()}\n` +
         `거리: ${distanceKm.toFixed(2)}km\n` +
         `위성 위치: ${targetDate.toLocaleString()}`;
-      this.tleMissionStatus.style.color = '#4CAF50';
+      this.tleMissionStatus.style.color = '#9C27B0';
 
       console.log(`[SatelliteUIManager] TLE 미션 위치 처리 완료`);
       console.log(`  미션 위치: 경도 ${missionLon.toFixed(4)}°, 위도 ${missionLat.toFixed(4)}°`);

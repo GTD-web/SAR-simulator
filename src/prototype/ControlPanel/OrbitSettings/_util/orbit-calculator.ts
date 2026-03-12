@@ -449,6 +449,50 @@ export function calculateOrbitPath(
 }
 
 /**
+ * 중심 시각 기준 궤도 경로 계산 (과거/미래 구간, poc 예측 경로와 동일한 방식)
+ * @param elements 궤도 6요소
+ * @param epochTime epoch 시각 (anomaly 기준)
+ * @param centerTime 경로의 중심 시각 (보통 viewer.clock.currentTime)
+ * @param totalDurationHours 전체 구간 (과거+미래, 예: 4 = 과거 2h + 미래 2h)
+ * @param sampleIntervalMinutes 샘플 간격 (분)
+ */
+export function calculateOrbitPathCentered(
+  elements: OrbitalElements,
+  epochTime: Cesium.JulianDate,
+  centerTime: Cesium.JulianDate,
+  totalDurationHours: number = 4,
+  sampleIntervalMinutes: number = 5
+): Cesium.Cartesian3[] {
+  const halfHours = totalDurationHours / 2;
+  const startTime = Cesium.JulianDate.addSeconds(
+    centerTime,
+    -halfHours * 3600,
+    new Cesium.JulianDate()
+  );
+  const sampleIntervalSeconds = sampleIntervalMinutes * 60;
+  const totalSamples = Math.floor((totalDurationHours * 3600) / sampleIntervalSeconds);
+  const positions: Cesium.Cartesian3[] = [];
+
+  const epochMs = Cesium.JulianDate.toDate(epochTime).getTime();
+
+  for (let i = 0; i <= totalSamples; i++) {
+    const sampleTime = Cesium.JulianDate.addSeconds(startTime, i * sampleIntervalSeconds, new Cesium.JulianDate());
+    const currentMs = Cesium.JulianDate.toDate(sampleTime).getTime();
+    const timeSinceEpoch = (currentMs - epochMs) / 1000;
+
+    try {
+      const eciPos = calculatePositionFromOrbitalElements(elements, timeSinceEpoch);
+      const earthRotationAngleDegrees = getEarthRotationAngleAtTime(sampleTime);
+      const geodetic = eciToGeodetic(eciPos.x, eciPos.y, eciPos.z, sampleTime, earthRotationAngleDegrees);
+      positions.push(Cesium.Cartesian3.fromDegrees(geodetic.longitude, geodetic.latitude, geodetic.altitude));
+    } catch {
+      // 샘플 건너뜀
+    }
+  }
+  return positions;
+}
+
+/**
  * 궤도 주기 계산 (케플러 제3법칙)
  */
 export function calculateOrbitalPeriod(semiMajorAxisKm: number): number {

@@ -130,6 +130,16 @@ export const CAMERA = {
   MIN_RANGE_HORIZONTAL: 20,
   /** 카메라 거리 배수 (BUS 크기의 배수) - moveSatelliteToEarth에서 사용 */
   RANGE_MULTIPLIER_HORIZONTAL: 3,
+  /** 위성 추적 시 최대 줌 아웃 거리 (미터) - 멀리 가지 못하게 제한 */
+  MAX_ZOOM_DISTANCE_WHEN_TRACKING: 20_000_000,
+  /** 궤도 설정 탭·위성 고정 시 카메라 거리 (미터) - 50m */
+  ORBIT_TAB_ZOOM_RANGE: 50,
+  /** 궤도 추적 시 pitch (도) - 양수=위에서 내려다보기 */
+  ORBIT_TRACK_PITCH_DEGREES: 45,
+  /** Fly to Satellite 버튼 시 pitch (도) - 등각(45°) 뷰, 양수=카메라가 위에 있어 아래를 봄 */
+  FLY_TO_SATELLITE_PITCH_DEGREES: 45,
+  /** Fly to Satellite 버튼 시 카메라 거리 (미터) - 위성 가까이 */
+  FLY_TO_SATELLITE_RANGE: 20,
 } as const;
 
 // 위치 검증 범위

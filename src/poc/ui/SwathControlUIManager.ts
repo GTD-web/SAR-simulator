@@ -859,7 +859,7 @@ export class SwathControlUIManager {
         this.realtimeTrackingToggle.style.background = '#f44336';
       } else {
         this.realtimeTrackingToggle.textContent = '시작';
-        this.realtimeTrackingToggle.style.background = '#4CAF50';
+        this.realtimeTrackingToggle.style.background = '#9C27B0';
       }
     }
   }

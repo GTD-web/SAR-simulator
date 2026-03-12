@@ -53,8 +53,8 @@ export function setupCameraAngle(
     return null;
   }
 
-  // trackedEntity 해제 (카메라 이동 방해 방지)
   viewer.trackedEntity = undefined;
+  restoreZoomDistance(viewer);
 
   const busPosition = busEntity.position?.getValue(Cesium.JulianDate.now());
   if (!busPosition) {
@@ -75,6 +75,7 @@ export function flyToPosition(viewer: any, position: Cesium.Cartesian3): number 
   }
 
   viewer.trackedEntity = undefined;
+  restoreZoomDistance(viewer);
   const cameraRange = calculateCameraRange();
 
   try {
@@ -109,8 +110,8 @@ export function setCameraToEntity(
     return;
   }
 
-  // trackedEntity 해제 (카메라 이동 방해 방지)
   viewer.trackedEntity = undefined;
+  restoreZoomDistance(viewer);
 
   const busPosition = busEntity.position?.getValue(Cesium.JulianDate.now());
   if (!busPosition) {
@@ -152,8 +153,8 @@ export function setCameraToEntityHorizontal(
     return;
   }
 
-  // trackedEntity 해제 (카메라 이동 방해 방지)
   viewer.trackedEntity = undefined;
+  restoreZoomDistance(viewer);
 
   const busPosition = busEntity.position?.getValue(Cesium.JulianDate.now());
   if (!busPosition) {
@@ -179,6 +180,46 @@ export function setCameraToEntityHorizontal(
       console.error('[setCameraToEntityHorizontal] 카메라 이동 오류:', error);
     }
   }, TIMER.CAMERA_ANIMATION_CANCEL_DELAY);
+}
+
+/**
+ * 엔티티로 카메라 이동 (zoomTo)
+ * @param setTrackedEntity false면 trackedEntity 미설정 (시뮬레이션 시 수동 lookAt용)
+ */
+export function zoomToEntityAndTrack(
+  viewer: any,
+  entity: any,
+  cameraRange?: number,
+  duration?: number,
+  setTrackedEntity = true
+): void {
+  if (!viewer || !entity) return;
+  if (viewer.camera._flight && viewer.camera._flight.isActive()) {
+    viewer.camera.cancelFlight();
+  }
+  viewer.trackedEntity = undefined;
+  const range = cameraRange ?? calculateCameraRange();
+  const pitch = cameraRange != null ? CAMERA.ORBIT_TRACK_PITCH_DEGREES : CAMERA.PITCH_DEGREES;
+  const offset = new Cesium.HeadingPitchRange(
+    Cesium.Math.toRadians(CAMERA.HEADING_DEGREES),
+    Cesium.Math.toRadians(pitch),
+    range
+  );
+  viewer.zoomTo(entity, { offset, duration: duration ?? 1 });
+  if (setTrackedEntity) {
+    viewer.trackedEntity = entity;
+  }
+  viewer.scene.screenSpaceCameraController.maximumZoomDistance =
+    CAMERA.MAX_ZOOM_DISTANCE_WHEN_TRACKING;
+}
+
+/**
+ * 줌 거리 제한 해제 (trackedEntity 해제 시 호출)
+ */
+export function restoreZoomDistance(viewer: any): void {
+  if (viewer?.scene?.screenSpaceCameraController) {
+    viewer.scene.screenSpaceCameraController.maximumZoomDistance = Number.POSITIVE_INFINITY;
+  }
 }
 
 /**

@@ -11,12 +11,13 @@ import { applyBusRollPitchYawToAxes } from './entity-creator.js';
 
 /**
  * XYZ 축 엔티티 생성
+ * @param getCurrentCartesian 현재 위치 getter (CallbackProperty에서 매 프레임 최신값 참조, 시뮬레이션 시 축 유지)
  * @param velocityOptions 속도 방향(방위각/고도각 deg). 없으면 기존 동작
  * @param getAxisOptions roll 포함 옵션 getter. CallbackProperty에서 호출되어 roll 변경 시 축 갱신
  */
 export function createAxisEntities(
   viewer: any,
-  currentCartesian: any,
+  getCurrentCartesian: () => any,
   axisLength: number,
   axisVisible: boolean,
   velocityOptions?: VelocityDirectionOptions,
@@ -36,7 +37,7 @@ export function createAxisEntities(
     name: 'X-Axis (Satellite Velocity)',
     polyline: {
       positions: new Cesium.CallbackProperty(() => {
-        return getAxisLinePositions(currentCartesian, 'x', axisLength, resolveOptions());
+        return getAxisLinePositions(getCurrentCartesian(), 'x', axisLength, resolveOptions());
       }, false),
       width: 3,
       material: Cesium.Color.RED,
@@ -50,7 +51,7 @@ export function createAxisEntities(
     name: 'Y-Axis (SAR Look Direction)',
     polyline: {
       positions: new Cesium.CallbackProperty(() => {
-        return getAxisLinePositions(currentCartesian, 'y', axisLength, resolveOptions());
+        return getAxisLinePositions(getCurrentCartesian(), 'y', axisLength, resolveOptions());
       }, false),
       width: 3,
       material: Cesium.Color.GREEN,
@@ -64,7 +65,7 @@ export function createAxisEntities(
     name: 'Z-Axis (Earth Center Direction)',
     polyline: {
       positions: new Cesium.CallbackProperty(() => {
-        return getAxisLinePositions(currentCartesian, 'z', axisLength, resolveOptions());
+        return getAxisLinePositions(getCurrentCartesian(), 'z', axisLength, resolveOptions());
       }, false),
       width: 3,
       material: Cesium.Color.BLUE,
@@ -77,7 +78,7 @@ export function createAxisEntities(
   const xLabelEntity = viewer.entities.add({
     name: 'X-Axis Label',
     position: new Cesium.CallbackProperty(() => {
-      return getAxisEndPosition(currentCartesian, 'x', axisLength, resolveOptions());
+      return getAxisEndPosition(getCurrentCartesian(), 'x', axisLength, resolveOptions());
     }, false),
     label: {
       text: 'X',
@@ -89,8 +90,8 @@ export function createAxisEntities(
       verticalOrigin: Cesium.VerticalOrigin.CENTER,
       horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      scaleByDistance: new Cesium.NearFarScalar(1.0e6, 1.0, 5.0e6, 0.0),
-      translucencyByDistance: new Cesium.NearFarScalar(1.0e6, 1.0, 5.0e6, 1.0),
+      scaleByDistance: new Cesium.NearFarScalar(50, 1.0, 5.0e6, 0.0),
+      translucencyByDistance: new Cesium.NearFarScalar(50, 1.0, 5.0e6, 1.0),
       show: axisVisible,
     },
   });
@@ -99,7 +100,7 @@ export function createAxisEntities(
   const yLabelEntity = viewer.entities.add({
     name: 'Y-Axis Label',
     position: new Cesium.CallbackProperty(() => {
-      return getAxisEndPosition(currentCartesian, 'y', axisLength, resolveOptions());
+      return getAxisEndPosition(getCurrentCartesian(), 'y', axisLength, resolveOptions());
     }, false),
     label: {
       text: 'Y',
@@ -111,8 +112,8 @@ export function createAxisEntities(
       verticalOrigin: Cesium.VerticalOrigin.CENTER,
       horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      scaleByDistance: new Cesium.NearFarScalar(1.0e6, 1.0, 5.0e6, 0.0),
-      translucencyByDistance: new Cesium.NearFarScalar(1.0e6, 1.0, 5.0e6, 1.0),
+      scaleByDistance: new Cesium.NearFarScalar(50, 1.0, 5.0e6, 0.0),
+      translucencyByDistance: new Cesium.NearFarScalar(50, 1.0, 5.0e6, 1.0),
       show: axisVisible,
     },
   });
@@ -121,7 +122,7 @@ export function createAxisEntities(
   const zLabelEntity = viewer.entities.add({
     name: 'Z-Axis Label',
     position: new Cesium.CallbackProperty(() => {
-      return getAxisEndPosition(currentCartesian, 'z', axisLength, resolveOptions());
+      return getAxisEndPosition(getCurrentCartesian(), 'z', axisLength, resolveOptions());
     }, false),
     label: {
       text: 'Z',
@@ -133,8 +134,8 @@ export function createAxisEntities(
       verticalOrigin: Cesium.VerticalOrigin.CENTER,
       horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      scaleByDistance: new Cesium.NearFarScalar(1.0e6, 1.0, 5.0e6, 0.0),
-      translucencyByDistance: new Cesium.NearFarScalar(1.0e6, 1.0, 5.0e6, 1.0),
+      scaleByDistance: new Cesium.NearFarScalar(50, 1.0, 5.0e6, 0.0),
+      translucencyByDistance: new Cesium.NearFarScalar(50, 1.0, 5.0e6, 1.0),
       show: axisVisible,
     },
   });
@@ -153,11 +154,10 @@ export function createAxisEntities(
 export type BusOrientation = { rollAngle: number; pitchAngle: number; yawAngle: number };
 
 /**
- * 안테나 XYZ 축 엔티티 생성 (안테나 위치에서 시작, BUS+안테나 방향 반영)
+ * 안테나 XYZ 축 엔티티 생성 (안테나 위치에서 시작, BUS와 동일한 축 방향)
  * @param velocityOptions 속도 방향(방위각/고도각 또는 ECEF). 없으면 기존 동작
- * @param busCartesian 버스 위치(ECEF). 주어지면 이 위치에서 축 방향을 계산
+ * @param getBusCartesian 버스 위치 getter. 주어지면 이 위치에서 축 방향 계산 (시뮬레이션 시 최신값 참조)
  * @param getBusOrientation BUS 방향 getter
- * @param getAntennaOrientation 안테나 방향 getter (BUS 축 기준)
  */
 export function createAntennaAxisEntities(
   viewer: any,
@@ -165,9 +165,8 @@ export function createAntennaAxisEntities(
   axisLength: number,
   axisVisible: boolean,
   velocityOptions?: VelocityDirectionOptions,
-  busCartesian?: any,
-  getBusOrientation?: () => BusOrientation | undefined,
-  getAntennaOrientation?: () => BusOrientation | undefined
+  getBusCartesian?: () => any,
+  getBusOrientation?: () => BusOrientation | undefined
 ): {
   xAxis: any;
   yAxis: any;
@@ -181,14 +180,11 @@ export function createAntennaAxisEntities(
     const time = viewer.clock.currentTime;
     const center = antennaEntity.position?.getValue(time);
     if (!center) return { center: null, axes: null };
-    const baseAxes = calculateBaseAxes(busCartesian || center, velocityOptions);
+    const busCart = getBusCartesian?.();
+    const baseAxes = calculateBaseAxes(busCart || center, velocityOptions);
     if (!baseAxes) return { center, axes: null };
     const busOri = getBusOrientation?.() ?? { rollAngle: 0, pitchAngle: 0, yawAngle: 0 };
-    let axes = applyBusRollPitchYawToAxes(baseAxes, busOri.rollAngle, busOri.pitchAngle, busOri.yawAngle);
-    const antOri = getAntennaOrientation?.();
-    if (antOri) {
-      axes = applyBusRollPitchYawToAxes(axes, antOri.rollAngle, antOri.pitchAngle, antOri.yawAngle);
-    }
+    const axes = applyBusRollPitchYawToAxes(baseAxes, busOri.rollAngle, busOri.pitchAngle, busOri.yawAngle);
     return { center, axes };
   };
 
@@ -254,8 +250,8 @@ export function createAntennaAxisEntities(
       verticalOrigin: Cesium.VerticalOrigin.CENTER,
       horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      scaleByDistance: new Cesium.NearFarScalar(1.0e6, 1.0, 5.0e6, 0.0),
-      translucencyByDistance: new Cesium.NearFarScalar(1.0e6, 1.0, 5.0e6, 1.0),
+      scaleByDistance: new Cesium.NearFarScalar(50, 1.0, 5.0e6, 0.0),
+      translucencyByDistance: new Cesium.NearFarScalar(50, 1.0, 5.0e6, 1.0),
       show: axisVisible,
     },
   });
@@ -277,8 +273,8 @@ export function createAntennaAxisEntities(
       verticalOrigin: Cesium.VerticalOrigin.CENTER,
       horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      scaleByDistance: new Cesium.NearFarScalar(1.0e6, 1.0, 5.0e6, 0.0),
-      translucencyByDistance: new Cesium.NearFarScalar(1.0e6, 1.0, 5.0e6, 1.0),
+      scaleByDistance: new Cesium.NearFarScalar(50, 1.0, 5.0e6, 0.0),
+      translucencyByDistance: new Cesium.NearFarScalar(50, 1.0, 5.0e6, 1.0),
       show: axisVisible,
     },
   });
@@ -300,8 +296,8 @@ export function createAntennaAxisEntities(
       verticalOrigin: Cesium.VerticalOrigin.CENTER,
       horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
-      scaleByDistance: new Cesium.NearFarScalar(1.0e6, 1.0, 5.0e6, 0.0),
-      translucencyByDistance: new Cesium.NearFarScalar(1.0e6, 1.0, 5.0e6, 1.0),
+      scaleByDistance: new Cesium.NearFarScalar(50, 1.0, 5.0e6, 0.0),
+      translucencyByDistance: new Cesium.NearFarScalar(50, 1.0, 5.0e6, 1.0),
       show: axisVisible,
     },
   });

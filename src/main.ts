@@ -1,10 +1,19 @@
 import { app, BrowserWindow } from 'electron';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 
 // ES 모듈에서 __dirname 대체
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// 개발 시 클라이언트/메인 코드 변경 시 자동 리로드
+const require = createRequire(import.meta.url);
+require('electron-reload')(__dirname);
+
+// datetime-local 등 네이티브 date picker를 영어(AM/PM)로 표시
+app.commandLine.appendSwitch('lang', 'en-US');
+app.commandLine.appendSwitch('accept-lang', 'en-US,en');
 
 let mainWindow: BrowserWindow | null = null;
 

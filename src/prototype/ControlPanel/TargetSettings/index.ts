@@ -10,6 +10,7 @@ import {
 } from './_util/sar-grid-to-cesium.js';
 import { fetchBuildingsFromOverpass } from './_util/overpass-buildings.js';
 import { addTerrainElevationToBuildings } from './_util/sar-region-payload.js';
+import { restoreZoomDistance } from '../SatelliteSettings/_util/camera-manager.js';
 
 /** DEM 격자 한 점 (SAR 지오코딩용) */
 export interface ElevationGridPoint {
@@ -97,14 +98,14 @@ export class TargetSettings {
     section.className = 'sidebar-section';
 
     const title = document.createElement('h3');
-    title.textContent = '타겟 설정';
+    title.textContent = 'Target Settings';
     section.appendChild(title);
 
     const description = document.createElement('p');
     description.style.color = '#aaa';
     description.style.fontSize = '12px';
     description.style.marginTop = '10px';
-    description.textContent = '타겟 관련 설정을 관리합니다.';
+    description.textContent = 'Manage target-related settings.';
     section.appendChild(description);
 
     // Target settings form
@@ -113,11 +114,11 @@ export class TargetSettings {
 
     // Target name input
     const nameLabel = document.createElement('label');
-    nameLabel.textContent = '타겟 이름:';
+    nameLabel.textContent = 'Target Name:';
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.id = 'prototypeTargetName';
-    nameInput.placeholder = '타겟 이름을 입력하세요';
+    nameInput.placeholder = 'Enter target name';
     nameInput.style.width = '100%';
     nameInput.style.marginTop = '4px';
     nameLabel.appendChild(nameInput);
@@ -127,7 +128,7 @@ export class TargetSettings {
     const longitudeLabel = document.createElement('label');
     longitudeLabel.style.marginTop = '10px';
     longitudeLabel.style.display = 'block';
-    longitudeLabel.textContent = '경도 (deg):';
+    longitudeLabel.textContent = 'Longitude (deg):';
     const longitudeInput = document.createElement('input');
     longitudeInput.type = 'number';
     longitudeInput.id = 'prototypeTargetLongitude';
@@ -144,7 +145,7 @@ export class TargetSettings {
     const latitudeLabel = document.createElement('label');
     latitudeLabel.style.marginTop = '10px';
     latitudeLabel.style.display = 'block';
-    latitudeLabel.textContent = '위도 (deg):';
+    latitudeLabel.textContent = 'Latitude (deg):';
     const latitudeInput = document.createElement('input');
     latitudeInput.type = 'number';
     latitudeInput.id = 'prototypeTargetLatitude';
@@ -161,7 +162,7 @@ export class TargetSettings {
     const altitudeLabel = document.createElement('label');
     altitudeLabel.style.marginTop = '10px';
     altitudeLabel.style.display = 'block';
-    altitudeLabel.textContent = '고도 (m):';
+    altitudeLabel.textContent = 'Altitude (m):';
     const altitudeInput = document.createElement('input');
     altitudeInput.type = 'number';
     altitudeInput.id = 'prototypeTargetAltitude';
@@ -179,7 +180,7 @@ export class TargetSettings {
     sar_section.style.paddingTop = '15px';
     sar_section.style.borderTop = '1px solid #333';
     const sar_title = document.createElement('h4');
-    sar_title.textContent = 'SAR 타겟 파라미터';
+    sar_title.textContent = 'SAR Target Parameters';
     sar_title.style.marginBottom = '10px';
     sar_title.style.fontSize = '14px';
     sar_title.style.color = '#ccc';
@@ -188,7 +189,7 @@ export class TargetSettings {
     // Along-track 방위각 (deg)
     this.createInputField(
       sar_section,
-      'Along-track 방위각 (deg, 0=북 90=동):',
+      'Along-track Heading (deg, 0=North 90=East):',
       'prototypeTargetAlongTrackHeading',
       '90',
       '-180',
@@ -221,7 +222,7 @@ export class TargetSettings {
 
     // 요약 (읽기 전용)
     const summary_title = document.createElement('h5');
-    summary_title.textContent = '요약';
+    summary_title.textContent = 'Summary';
     summary_title.style.marginTop = '12px';
     summary_title.style.fontSize = '12px';
     summary_title.style.color = '#aaa';
@@ -242,7 +243,7 @@ export class TargetSettings {
     const region_info_btn = document.createElement('button');
     region_info_btn.type = 'button';
     region_info_btn.id = 'prototypeFetchRegionInfo';
-    region_info_btn.textContent = '지역 정보 가져오기';
+    region_info_btn.textContent = 'Fetch Region Info';
     region_info_btn.className = 'sidebar-section button';
     region_info_btn.style.width = '100%';
     region_info_btn.style.marginTop = '8px';
@@ -379,7 +380,7 @@ export class TargetSettings {
       azimuth_params
     );
     this.target_footprint_entity = this.viewer.entities.add({
-      name: 'SAR 타겟 영역',
+      name: 'SAR Target Region',
       position: Cesium.Cartesian3.fromDegrees(
         grid_center.longitude_deg,
         grid_center.latitude_deg,
@@ -533,7 +534,7 @@ export class TargetSettings {
     const btn = this.fetch_region_info_button;
     if (btn) {
       btn.disabled = true;
-      btn.textContent = '가져오는 중…';
+      btn.textContent = 'Fetching...';
     }
     const center_lon = parseFloat(
       (document.getElementById('prototypeTargetLongitude') as HTMLInputElement)?.value || '127'
@@ -640,7 +641,7 @@ export class TargetSettings {
     this.on_region_info_fetched(regionInfo);
     if (btn) {
       btn.disabled = false;
-      btn.textContent = '지역 정보 가져오기';
+      btn.textContent = 'Fetch Region Info';
     }
   }
 
@@ -737,6 +738,7 @@ export class TargetSettings {
         this.viewer.camera.cancelFlight();
       }
       this.viewer.trackedEntity = undefined;
+      restoreZoomDistance(this.viewer);
 
       // 폴리곤 엔티티의 position(그리드 중심)으로만 비행 (카메라 고정 없음)
       if (this.target_footprint_entity) {

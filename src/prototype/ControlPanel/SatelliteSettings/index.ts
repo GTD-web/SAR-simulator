@@ -1,23 +1,31 @@
 import { SatelliteBusPayloadManager } from './SatelliteBusPayloadManager/index.js';
 import type { OrbitSettings } from '../OrbitSettings/index.js';
 import { PrototypeSwathPreview } from './_util/prototype-swath-preview.js';
+import { AttitudeMiniMapViewer } from './_util/attitude-mini-map-viewer.js';
 import { renderSatelliteSettingsForm, FormRendererCallbacks } from './_ui/form-renderer.js';
 import { updateEntity } from './_util/entity-updater.js';
 import { createSatelliteEntity } from './_util/entity-creator.js';
 import { getDirectionForInputId } from './_util/direction-mapper.js';
-import { parseBusOrientationInputs } from './_util/input-parser.js';
+import {
+  parseBusOrientationInputs,
+  parseBusDimensionsInputs,
+  parseAntennaDimensionsInputs,
+  parseAntennaGapInput,
+  parseAntennaOrientationInputs,
+  parseSatelliteBasicInfo,
+} from './_util/input-parser.js';
 import { waitForCameraReady, setupCameraAngle, setupCanvasFocus } from './_util/camera-manager.js';
-import { 
-  TIMER, 
-  DEFAULT_POSITION, 
-  DEFAULT_BUS_DIMENSIONS_M, 
+import {
+  TIMER,
+  DEFAULT_POSITION,
+  DEFAULT_BUS_DIMENSIONS_M,
   DEFAULT_BUS_DIMENSIONS_MM,
   DEFAULT_BUS_ORIENTATION,
-  DEFAULT_ANTENNA_DIMENSIONS_M, 
-  DEFAULT_ANTENNA_GAP_M, 
+  DEFAULT_ANTENNA_DIMENSIONS_M,
+  DEFAULT_ANTENNA_GAP_M,
   DEFAULT_ANTENNA_ORIENTATION,
   DEFAULT_SATELLITE_INFO,
-  POSITION_VALIDATION
+  POSITION_VALIDATION,
 } from './constants.js';
 import { setCameraToEntityHorizontal } from './_util/camera-manager.js';
 
@@ -30,6 +38,7 @@ export class SatelliteSettings {
   private busPayloadManager: SatelliteBusPayloadManager | null;
   private orbitSettingsRef: OrbitSettings | null;
   private swathPreview: PrototypeSwathPreview | null;
+  private attitudeMiniMap: AttitudeMiniMapViewer | null;
   private updateDebounceTimer: number | null;
   private currentDirectionInputId: string | null;
   private cameraAnimationTimer: number | null;
@@ -40,6 +49,7 @@ export class SatelliteSettings {
     this.busPayloadManager = null;
     this.orbitSettingsRef = null;
     this.swathPreview = null;
+    this.attitudeMiniMap = null;
     this.updateDebounceTimer = null;
     this.currentDirectionInputId = null;
     this.cameraAnimationTimer = null;
@@ -62,6 +72,8 @@ export class SatelliteSettings {
       this.busPayloadManager = new SatelliteBusPayloadManager(this.viewer);
       this.swathPreview = new PrototypeSwathPreview(this.viewer, this.busPayloadManager);
       this.swathPreview.init();
+      this.attitudeMiniMap = new AttitudeMiniMapViewer(this.viewer, this.busPayloadManager);
+      this.attitudeMiniMap.init();
     }
     this.render();
     
@@ -75,10 +87,10 @@ export class SatelliteSettings {
   }
 
   /**
-   * 초기 엔티티 생성 - 궤도 6요소로 계산된 궤도 위 위치에 위성 배치
-   * (기존 DEFAULT_POSITION 우주 공간 배치 제거, 궤도 위 위성으로 바로 시작)
+   * 초기 엔티티 생성 - 위성 설정·궤도 설정 폼 값에 따라 궤도 위에 위성 배치
+   * @param flyAfterCreate true면 생성 후 궤도로 카메라 이동 (flyToSatelliteEntity 등에서 사용)
    */
-  private createInitialEntityOnOrbit(): void {
+  private createInitialEntityOnOrbit(flyAfterCreate = false): void {
     if (!this.busPayloadManager || !this.viewer) {
       console.error('[SatelliteSettings] 초기 엔티티 생성 실패: busPayloadManager 또는 viewer가 없습니다.');
       return;
@@ -96,30 +108,48 @@ export class SatelliteSettings {
     }
 
     try {
+      // 위성 설정 폼 값 사용 (폼 없거나 파싱 실패 시 기본값)
+      const { name } = parseSatelliteBasicInfo();
+      const busDimensions = parseBusDimensionsInputs() ?? {
+        length: DEFAULT_BUS_DIMENSIONS_M.LENGTH,
+        width: DEFAULT_BUS_DIMENSIONS_M.WIDTH,
+        height: DEFAULT_BUS_DIMENSIONS_M.HEIGHT,
+      };
+      const antennaDimensions = parseAntennaDimensionsInputs() ?? {
+        height: DEFAULT_ANTENNA_DIMENSIONS_M.HEIGHT,
+        width: DEFAULT_ANTENNA_DIMENSIONS_M.WIDTH,
+        depth: DEFAULT_ANTENNA_DIMENSIONS_M.DEPTH,
+      };
+      const antennaOrientation = parseAntennaOrientationInputs() ?? {
+        rollAngle: DEFAULT_ANTENNA_ORIENTATION.ROLL,
+        pitchAngle: DEFAULT_ANTENNA_ORIENTATION.PITCH,
+        yawAngle: DEFAULT_ANTENNA_ORIENTATION.YAW,
+        initialElevationAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_ELEVATION,
+        initialAzimuthAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_AZIMUTH,
+      };
+      const antennaGap = parseAntennaGapInput() ?? DEFAULT_ANTENNA_GAP_M;
+      const busOrientation = parseBusOrientationInputs() ?? DEFAULT_BUS_ORIENTATION;
+
       this.busPayloadManager.createSatellite(
-        DEFAULT_SATELLITE_INFO.NAME,
+        name,
         {
           longitude: result.longitude,
           latitude: result.latitude,
           altitude: result.altitude,
         },
+        busDimensions,
         {
-          length: DEFAULT_BUS_DIMENSIONS_M.LENGTH,
-          width: DEFAULT_BUS_DIMENSIONS_M.WIDTH,
-          height: DEFAULT_BUS_DIMENSIONS_M.HEIGHT,
+          height: antennaDimensions.height,
+          width: antennaDimensions.width,
+          depth: antennaDimensions.depth,
+          rollAngle: antennaOrientation.rollAngle,
+          pitchAngle: antennaOrientation.pitchAngle,
+          yawAngle: antennaOrientation.yawAngle,
+          initialElevationAngle: antennaOrientation.initialElevationAngle,
+          initialAzimuthAngle: antennaOrientation.initialAzimuthAngle,
         },
-        {
-          height: DEFAULT_ANTENNA_DIMENSIONS_M.HEIGHT,
-          width: DEFAULT_ANTENNA_DIMENSIONS_M.WIDTH,
-          depth: DEFAULT_ANTENNA_DIMENSIONS_M.DEPTH,
-          rollAngle: DEFAULT_ANTENNA_ORIENTATION.ROLL,
-          pitchAngle: DEFAULT_ANTENNA_ORIENTATION.PITCH,
-          yawAngle: DEFAULT_ANTENNA_ORIENTATION.YAW,
-          initialElevationAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_ELEVATION,
-          initialAzimuthAngle: DEFAULT_ANTENNA_ORIENTATION.INITIAL_AZIMUTH,
-        },
-        DEFAULT_ANTENNA_GAP_M,
-        DEFAULT_BUS_ORIENTATION
+        antennaGap,
+        busOrientation
       );
 
       this.busPayloadManager.setVelocityDirectionEcef(
@@ -128,8 +158,12 @@ export class SatelliteSettings {
         result.velocityEcef.z
       );
 
-      // 엔티티가 씬에 렌더된 후 카메라 이동 (postRender로 대기)
-      this.flyToOrbitAfterEntityRendered();
+      // 궤도 설정에 따라 TLE 궤도 그리기 (시뮬레이션은 사용자가 시작)
+      this.orbitSettingsRef?.applyOrbitToSatellite(false, false);
+
+      if (flyAfterCreate) {
+        this.flyToOrbitAfterEntityRendered();
+      }
     } catch (error) {
       console.error('[SatelliteSettings] 궤도 위 초기 엔티티 생성 오류:', error);
     }
@@ -454,7 +488,7 @@ export class SatelliteSettings {
     const busEntity = this.busPayloadManager.getBusEntity();
     if (!busEntity) {
       // 엔티티가 없으면 궤도 위 초기 엔티티 생성 후 카메라 이동
-      this.createInitialEntityOnOrbit();
+      this.createInitialEntityOnOrbit(true);
       return;
     }
 
@@ -472,6 +506,13 @@ export class SatelliteSettings {
    */
   getBusPayloadManager(): SatelliteBusPayloadManager | null {
     return this.busPayloadManager;
+  }
+
+  /**
+   * 자세 미니맵 반환 (카메라 위치 조정 등)
+   */
+  getAttitudeMiniMap(): AttitudeMiniMapViewer | null {
+    return this.attitudeMiniMap;
   }
 
   /**
@@ -514,6 +555,10 @@ export class SatelliteSettings {
     if (this.swathPreview) {
       this.swathPreview.clear();
       this.swathPreview = null;
+    }
+    if (this.attitudeMiniMap) {
+      this.attitudeMiniMap.clear();
+      this.attitudeMiniMap = null;
     }
     if (this.busPayloadManager) {
       this.busPayloadManager.removeSatellite();

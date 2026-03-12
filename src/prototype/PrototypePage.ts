@@ -523,15 +523,9 @@ const terrain = {
       // 3. 건물 레이어 추가
       await this.viewerManager.addBuildings();
 
-      // 4. 카메라 설정
-      this.viewerManager.setupCamera(
-        Cesium.Cartesian3.fromDegrees(0, 0, 20000000),
-        {
-          heading: Cesium.Math.toRadians(0.0),
-          pitch: Cesium.Math.toRadians(-90.0),
-        },
-        2.0
-      );
+      // 4. 카메라: 지구 중심으로 초기화 (컨트롤 가능)
+      this.viewer.trackedEntity = undefined;
+      this.viewer.camera.flyHome(0);
 
       // 5. 우측 지역 정보 패널 생성 (초기 숨김)
       this.createRegionInfoPanel();
@@ -549,6 +543,7 @@ const terrain = {
       this.viewerManager.setupMapRightClickHandler((lon, lat, x, y) => {
         this.showMapContextMenu(lon, lat, x, y);
       });
+
     } catch (error) {
       console.error('[PrototypePage] 초기화 오류:', error);
     }
