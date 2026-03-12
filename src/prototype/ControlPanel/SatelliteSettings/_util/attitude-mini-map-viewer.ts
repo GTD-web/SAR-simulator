@@ -27,6 +27,8 @@ export class AttitudeMiniMapViewer {
   private postRenderRemove: (() => void) | null;
   private cameraOffsetM: number;
   private cameraWeights: { above: number; behind: number; left: number };
+  private isCollapsed: boolean;
+  private expandButton: HTMLElement | null;
 
   constructor(mainViewer: any, busPayloadManager: SatelliteBusPayloadManager | null) {
     this.mainViewer = mainViewer;
@@ -39,6 +41,8 @@ export class AttitudeMiniMapViewer {
     this.postRenderRemove = null;
     this.cameraOffsetM = DEFAULT_CAMERA_OFFSET_M;
     this.cameraWeights = { ...DEFAULT_CAMERA_WEIGHTS };
+    this.isCollapsed = false;
+    this.expandButton = null;
   }
 
   /**
@@ -93,20 +97,52 @@ export class AttitudeMiniMapViewer {
       background: color-mix(in srgb, var(--dark-amethyst) 95%, transparent);
     `;
 
+    const header = document.createElement('div');
+    header.style.cssText = `
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 4px;
+      z-index: 10;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.3), transparent);
+    `;
+
     const label = document.createElement('div');
     label.className = 'attitude-mini-map-label';
     label.textContent = 'Orientation';
     label.style.cssText = `
-      position: absolute;
-      top: 4px;
-      left: 4px;
       font-size: 11px;
       color: var(--pink-orchid);
-      z-index: 10;
       pointer-events: none;
       text-shadow: 0 1px 2px rgba(0,0,0,0.8);
     `;
-    container.appendChild(label);
+    header.appendChild(label);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.textContent = '−';
+    closeBtn.title = '미니맵 닫기';
+    closeBtn.style.cssText = `
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border: none;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.15);
+      color: var(--pink-orchid);
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+    `;
+    closeBtn.addEventListener('click', () => this.collapse());
+    header.appendChild(closeBtn);
+
+    container.appendChild(header);
 
     const cesiumDiv = document.createElement('div');
     cesiumDiv.id = 'attitudeMiniMapCesium';
@@ -115,6 +151,54 @@ export class AttitudeMiniMapViewer {
 
     document.body.appendChild(container);
     this.miniContainer = container;
+  }
+
+  private collapse(): void {
+    if (!this.miniContainer) return;
+    this.isCollapsed = true;
+    this.miniContainer.style.display = 'none';
+    this.createExpandButton();
+  }
+
+  private expand(): void {
+    this.isCollapsed = false;
+    this.removeExpandButton();
+    if (this.miniContainer) {
+      this.miniContainer.style.display = '';
+    }
+  }
+
+  private createExpandButton(): void {
+    this.removeExpandButton();
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Orientation';
+    btn.title = '미니맵 열기';
+    btn.style.cssText = `
+      position: fixed;
+      bottom: 70px;
+      right: 12px;
+      width: 72px;
+      height: 28px;
+      z-index: 1000;
+      border: 2px solid var(--dusty-grape);
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--dark-amethyst) 95%, transparent);
+      color: var(--pink-orchid);
+      font-size: 11px;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    `;
+    btn.addEventListener('click', () => this.expand());
+    document.body.appendChild(btn);
+    this.expandButton = btn;
+  }
+
+  private removeExpandButton(): void {
+    if (this.expandButton?.parentNode) {
+      this.expandButton.parentNode.removeChild(this.expandButton);
+    }
+    this.expandButton = null;
   }
 
   private createMiniViewer(): void {
@@ -373,6 +457,7 @@ export class AttitudeMiniMapViewer {
    * 미니맵 제거
    */
   clear(): void {
+    this.removeExpandButton();
     if (typeof this.postRenderRemove === 'function') {
       this.postRenderRemove();
       this.postRenderRemove = null;
