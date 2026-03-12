@@ -5,16 +5,25 @@
 import type { OrbitalElements } from '../_util/orbit-calculator.js';
 import { computeTimeOverPosition } from '../_util/orbit-calculator.js';
 import { ORBIT_FORM_IDS } from '../_util/orbit-form-parser.js';
+import { tleToOrbitalElements } from '../_util/tle-to-orbital-elements.js';
 
-/** RADARSAT RCM 위성 기본값 */
-const RADARSAT_RCM: OrbitalElements = {
-  semiMajorAxis: 6970.1, // km (고도 592 km)
-  eccentricity: 0.0001,
-  inclination: 97.74,
-  raan: 0,
-  argumentOfPerigee: 0,
-  meanAnomaly: 0,
-};
+/** 기본 TLE (궤도 6요소 기본값으로 변환됨) */
+const DEFAULT_TLE = `1 99999U 26001A   26293.53822670  .00000000  00000-0  30000-4 0  0009
+2 99999  97.4358 264.7523 0007588  76.9771 265.0143 15.16113802   017`;
+
+/** 궤도 6요소 기본값 (TLE에서 변환, 실패 시 폴백) */
+const RADARSAT_RCM: OrbitalElements = (() => {
+  const fromTle = tleToOrbitalElements(DEFAULT_TLE);
+  if (fromTle) return fromTle;
+  return {
+    semiMajorAxis: 6970.1,
+    eccentricity: 0.0001,
+    inclination: 97.74,
+    raan: 0,
+    argumentOfPerigee: 0,
+    meanAnomaly: 0,
+  };
+})();
 
 export interface OrbitFormRendererCallbacks {
   /** 궤도 입력값 변경 시 호출 (debounced) */

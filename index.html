@@ -156,6 +156,14 @@
 
     // 2. 새로고침 후, App.js가 기본값 세팅을 다 끝낼 때까지 1.5초(1500ms) 기다렸다가 기습 덮어쓰기!
     setTimeout(() => {
+      // 궤도 기본값 버전: TLE 변경 시 저장된 orbit 값 초기화
+      const ORBIT_DEFAULT_VERSION = 'tle-99999-v1';
+      const orbitInputIds = ['prototypeOrbitSemiMajorAxis', 'prototypeOrbitEccentricity', 'prototypeOrbitInclination', 'prototypeOrbitRAAN', 'prototypeOrbitArgumentOfPerigee', 'prototypeOrbitAnomalyType', 'prototypeOrbitAnomaly', 'prototypeOrbitInitialDate', 'prototypeOrbitInitialTime'];
+      if (localStorage.getItem('sar_sim_orbit_default_version') !== ORBIT_DEFAULT_VERSION) {
+        orbitInputIds.forEach(id => localStorage.removeItem('sar_sim_final_' + id));
+        localStorage.setItem('sar_sim_orbit_default_version', ORBIT_DEFAULT_VERSION);
+      }
+
       const inputs = document.querySelectorAll('#sidebarContent input, #sidebarContent select, #sidebarContent textarea');
       inputs.forEach(input => {
         if (!input.id) return;
