@@ -2,6 +2,7 @@ import { SatelliteSettings } from './SatelliteSettings/index.js';
 import { OrbitSettings } from './OrbitSettings/index.js';
 import { TargetSettings, type TargetSettingsOptions } from './TargetSettings/index.js';
 import { restoreZoomDistance } from './SatelliteSettings/_util/camera-manager.js';
+import { SARSwathCalculator } from '../../poc/utils/sar-swath-calculator.js';
 
 export interface ControlPanelOptions {
   onRegionInfoFetched?: (data: import('./TargetSettings/index.js').RegionInfo) => void;
@@ -272,6 +273,89 @@ export class ControlPanelManager {
       this.viewer.camera.flyHome(0);
     } catch (error) {
       console.error('[ControlPanelManager] 지구로 카메라 이동 오류:', error);
+    }
+  }
+
+  /**
+   * Swath 영역으로 카메라 이동 (즉시, 수직 하향 뷰)
+   */
+  flyToSwath(): void {
+    if (!this.viewer || !this.satelliteSettings) return;
+
+    const busPayloadManager = this.satelliteSettings.getBusPayloadManager();
+    const groundPoint = busPayloadManager?.getYAxisGroundPoint?.();
+    const pos = busPayloadManager?.getPositionForSwath?.();
+    if (!groundPoint || !pos) {
+      console.warn('[ControlPanelManager] flyToSwath: swath 위치 없음 (위성/안테나 필요)');
+      return;
+    }
+
+    const SWATH_SPACING_M = 5000;
+    const halfSpacing = SWATH_SPACING_M / 2;
+    const geometry = {
+      centerLat: groundPoint.latitude,
+      centerLon: groundPoint.longitude,
+      heading: pos.heading,
+      nearRange: -halfSpacing,
+      farRange: halfSpacing,
+      swathWidth: SWATH_SPACING_M,
+      azimuthLength: SWATH_SPACING_M,
+      satelliteAltitude: pos.altitude,
+    };
+
+    try {
+      const corners = SARSwathCalculator.calculateSwathCorners(geometry);
+      const positions = SARSwathCalculator.cornersToCartesian(corners);
+      if (positions.length < 4) return;
+
+      let west = Infinity;
+      let south = Infinity;
+      let east = -Infinity;
+      let north = -Infinity;
+      for (const cartesianPos of positions) {
+        const carto = Cesium.Cartographic.fromCartesian(cartesianPos);
+        const lon = Cesium.Math.toDegrees(carto.longitude);
+        const lat = Cesium.Math.toDegrees(carto.latitude);
+        west = Math.min(west, lon);
+        south = Math.min(south, lat);
+        east = Math.max(east, lon);
+        north = Math.max(north, lat);
+      }
+
+      const centerLon = (west + east) / 2;
+      const centerLat = (south + north) / 2;
+      const latSpanM = (north - south) * 111000;
+      const lonSpanM = (east - west) * 111000 * Math.cos((centerLat * Math.PI) / 180);
+      const maxSpan = Math.max(latSpanM, lonSpanM, 1000) * 16;
+
+      const centerCartesian = Cesium.Cartesian3.fromDegrees(centerLon, centerLat, 0);
+      const radialUp = Cesium.Cartesian3.normalize(centerCartesian, new Cesium.Cartesian3());
+      const camPos = Cesium.Cartesian3.add(
+        centerCartesian,
+        Cesium.Cartesian3.multiplyByScalar(radialUp, maxSpan, new Cesium.Cartesian3()),
+        new Cesium.Cartesian3()
+      );
+      const direction = Cesium.Cartesian3.negate(radialUp, new Cesium.Cartesian3());
+      const zAxis = new Cesium.Cartesian3(0, 0, 1);
+      let eastVec = Cesium.Cartesian3.cross(zAxis, radialUp, new Cesium.Cartesian3());
+      if (Cesium.Cartesian3.magnitude(eastVec) < 1e-6) eastVec = new Cesium.Cartesian3(1, 0, 0);
+      Cesium.Cartesian3.normalize(eastVec, eastVec);
+      const northWC = Cesium.Cartesian3.cross(radialUp, eastVec, new Cesium.Cartesian3());
+      Cesium.Cartesian3.normalize(northWC, northWC);
+
+      if (this.viewer.camera._flight && this.viewer.camera._flight.isActive()) {
+        this.viewer.camera.cancelFlight();
+      }
+      this.viewer.trackedEntity = undefined;
+      this.viewer._trackingTarget = undefined;
+      restoreZoomDistance(this.viewer);
+
+      this.viewer.camera.setView({
+        destination: camPos,
+        orientation: { direction, up: northWC },
+      });
+    } catch (error) {
+      console.error('[ControlPanelManager] flyToSwath 오류:', error);
     }
   }
 

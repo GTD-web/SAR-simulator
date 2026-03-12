@@ -399,8 +399,18 @@ const terrain = {
       this.controlPanelManager?.flyToEarth();
     });
 
+    const btnSwath = document.createElement('button');
+    btnSwath.id = 'btnFlyToSwath';
+    btnSwath.type = 'button';
+    btnSwath.title = 'Fly to swath area';
+    btnSwath.innerHTML = '<span class="cam-btn-icon swath-icon"></span>Swath';
+    btnSwath.addEventListener('click', () => {
+      this.controlPanelManager?.flyToSwath();
+    });
+
     container.appendChild(btnSatellite);
     container.appendChild(btnEarth);
+    container.appendChild(btnSwath);
     document.body.appendChild(container);
 
     this.injectCameraButtonStyles();
@@ -477,6 +487,10 @@ const terrain = {
       .earth-icon {
         -webkit-mask-image: url('assets/earth-14-svgrepo-com.svg');
         mask-image: url('assets/earth-14-svgrepo-com.svg');
+      }
+      .swath-icon {
+        -webkit-mask-image: url('assets/square-dashed-svgrepo-com.svg');
+        mask-image: url('assets/square-dashed-svgrepo-com.svg');
       }
     `;
     document.head.appendChild(style);
