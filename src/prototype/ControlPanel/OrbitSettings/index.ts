@@ -127,7 +127,7 @@ export class OrbitSettings {
 
     renderOrbitForm(this.container, {
       onOrbitChange: () => this.debouncedApplyOrbit(),
-      onApplyOrbit: () => this.applyOrbitToSatellite(true, true),
+      onApplyOrbit: () => this.applyOrbitToSatellite(true, false),
     });
 
     if (this.viewer) {
@@ -686,15 +686,23 @@ export class OrbitSettings {
       // postRender 등록 (Cesium play 버튼/타임라인 스크럽 시 위성 위치 갱신)
       this.ensureOrbitPostRenderAttached();
 
+      const busEntity = this.busPayloadManager?.getBusEntity();
       if (startSimulation) {
         this.startSimulationLoop();
+        if (busEntity) {
+          zoomToEntityAndTrack(this.viewer, busEntity, calculateCameraRange(), 0);
+        }
       } else {
-        const position = Cesium.Cartesian3.fromDegrees(
-          result.longitude,
-          result.latitude,
-          result.altitude
-        );
-        flyToPosition(this.viewer, position);
+        if (busEntity) {
+          zoomToEntityAndTrack(this.viewer, busEntity, calculateCameraRange(), 0);
+        } else {
+          const position = Cesium.Cartesian3.fromDegrees(
+            result.longitude,
+            result.latitude,
+            result.altitude
+          );
+          flyToPosition(this.viewer, position);
+        }
       }
 
       this.updatePassDirectionDisplay(result.passDirection);

@@ -58,8 +58,11 @@ export class ViewerInitializer {
     // 스크롤 줌 단위 축소
     controller.zoomFactor = 0.8;
 
+    // Cesium 기본 wheel 줌 비활성화 (trackedEntity 시 pickPosition 버그 회피, setupZoomLimits가 대신 처리)
+    controller.enableZoom = false;
+
     // 줌인/줌아웃 제한 (wheel 직접 처리, Cesium 기본 제한은 enableCollisionDetection 의존)
-    setupZoomLimits(viewer);
+    setupZoomLimits(viewer, containerId);
 
     return viewer;
   }
@@ -69,71 +72,67 @@ const ZOOM_MIN_M = 0.5;
 const ZOOM_MAX_M = 10_000_000;
 const ZOOM_FACTOR = 0.0012;
 
-/** wheel 줌에 거리 제한 적용 */
-function setupZoomLimits(viewer: any): void {
-  viewer.scene.canvas.addEventListener(
+/**
+ * wheel 줌 핸들러 - moveForward/moveBackward로 거리만 변경
+ * lookAt()을 사용하지 않아 카메라 lock이 발생하지 않음 → 회전 가능
+ */
+function setupZoomLimits(viewer: any, containerId: string): void {
+  const container = document.getElementById(containerId);
+  const canvas = viewer.scene.canvas;
+  if (!container || !canvas) return;
+
+  document.addEventListener(
     'wheel',
     (e: WheelEvent) => {
-      const entity = viewer.trackedEntity;
-      let targetPos: Cesium.Cartesian3 | undefined;
-      let range: number;
+      if (!container.contains(e.target as Node)) return;
 
+      const cam = viewer.camera;
+      let targetPos: Cesium.Cartesian3 | undefined;
+
+      const entity = viewer.trackedEntity;
       if (entity?.position) {
-        const pos = entity.position.getValue(viewer.clock.currentTime);
-        if (!pos) return;
-        targetPos = pos;
+        targetPos = entity.position.getValue(viewer.clock.currentTime);
       } else {
-        const ray = viewer.camera.getPickRay(new Cesium.Cartesian2(
-          viewer.scene.canvas.clientWidth / 2,
-          viewer.scene.canvas.clientHeight / 2
-        ));
-        if (!ray) return;
-        targetPos = viewer.scene.globe.pick(ray, viewer.scene);
-        if (!targetPos) {
-          const intersection = (Cesium as any).IntersectionTests?.rayEllipsoid?.(
-            ray,
-            viewer.scene.globe.ellipsoid
-          );
-          if (!intersection) return;
-          targetPos = (Cesium as any).Ray.getPoint(ray, intersection.start);
+        const ray = cam.getPickRay(
+          new Cesium.Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2)
+        );
+        if (ray) {
+          targetPos = viewer.scene.globe.pick(ray, viewer.scene);
+          if (!targetPos) {
+            const intersection = (Cesium as any).IntersectionTests?.rayEllipsoid?.(
+              ray,
+              viewer.scene.globe.ellipsoid
+            );
+            if (intersection) {
+              targetPos = (Cesium as any).Ray.getPoint(ray, intersection.start);
+            }
+          }
         }
       }
 
-      if (!targetPos) return;
-
-      const camPos = viewer.camera.positionWC;
-      range = Cesium.Cartesian3.distance(camPos, targetPos);
-      if (range < 1e-6) return;
-
-      const delta = e.deltaY * ZOOM_FACTOR * range;
-      const newRange = Math.max(ZOOM_MIN_M, Math.min(ZOOM_MAX_M, range + delta));
-
-      // 한계에 도달했으면 스크롤 이벤트 무시 (불필요한 lookAt/렌더 스킵)
-      if (newRange === range) {
+      if (!targetPos) {
         e.preventDefault();
         e.stopPropagation();
         return;
       }
 
-      const transform = Cesium.Transforms.eastNorthUpToFixedFrame(targetPos);
-      const toCamera = Cesium.Cartesian3.subtract(camPos, targetPos, new Cesium.Cartesian3());
-      const invTransform = (Cesium.Matrix4 as any).inverseTransformation(
-        transform,
-        new Cesium.Matrix4()
-      );
-      const local = Cesium.Matrix4.multiplyByPoint(
-        invTransform,
-        toCamera,
-        new Cesium.Cartesian3()
-      );
-      const heading = Math.atan2(local.x, local.y);
-      const mag = Cesium.Cartesian3.magnitude(toCamera);
-      const pitch = mag > 0 ? Math.asin(Math.max(-1, Math.min(1, local.z / mag))) : 0;
+      const range = Cesium.Cartesian3.distance(cam.positionWC, targetPos);
+      if (range < 1e-6) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
 
-      viewer.camera.lookAt(
-        targetPos,
-        new Cesium.HeadingPitchRange(heading, pitch, newRange)
-      );
+      const delta = e.deltaY * ZOOM_FACTOR * range;
+      const newRange = Math.max(ZOOM_MIN_M, Math.min(ZOOM_MAX_M, range + delta));
+      const moveAmount = newRange - range;
+
+      if (moveAmount > 0) {
+        cam.moveBackward(moveAmount);
+      } else if (moveAmount < 0) {
+        cam.moveForward(-moveAmount);
+      }
+
       e.preventDefault();
       e.stopPropagation();
       viewer.scene.requestRender();
