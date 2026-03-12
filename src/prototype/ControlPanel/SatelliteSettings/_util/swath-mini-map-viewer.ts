@@ -13,6 +13,7 @@ const MINI_MAP_PADDING_FACTOR = 1.5;
 export class SwathMiniMapViewer {
   private mainViewer: any;
   private busPayloadManager: SatelliteBusPayloadManager | null;
+  private expandButtonContainer: HTMLElement | null;
   private miniContainer: HTMLElement | null;
   private miniViewer: any;
   private swathEntity: any;
@@ -20,9 +21,14 @@ export class SwathMiniMapViewer {
   private isCollapsed: boolean;
   private expandButton: HTMLElement | null;
 
-  constructor(mainViewer: any, busPayloadManager: SatelliteBusPayloadManager | null) {
+  constructor(
+    mainViewer: any,
+    busPayloadManager: SatelliteBusPayloadManager | null,
+    expandButtonContainer?: HTMLElement | null
+  ) {
     this.mainViewer = mainViewer;
     this.busPayloadManager = busPayloadManager;
+    this.expandButtonContainer = expandButtonContainer ?? null;
     this.miniContainer = null;
     this.miniViewer = null;
     this.swathEntity = null;
@@ -141,23 +147,26 @@ export class SwathMiniMapViewer {
     btn.type = 'button';
     btn.textContent = 'AOI';
     btn.title = '미니맵 열기';
-    btn.style.cssText = `
-      position: fixed;
-      top: 12px;
-      right: 12px;
-      width: 48px;
-      height: 28px;
-      z-index: 1000;
-      border: 2px solid var(--dusty-grape);
-      border-radius: 6px;
-      background: color-mix(in srgb, var(--dark-amethyst) 95%, transparent);
-      color: var(--pink-orchid);
-      font-size: 11px;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-    `;
+    btn.className = 'cam-btn-minimap-expand';
+    if (!this.expandButtonContainer) {
+      btn.style.cssText = `
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        width: 48px;
+        height: 28px;
+        z-index: 1000;
+        border: 2px solid var(--dusty-grape);
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--dark-amethyst) 95%, transparent);
+        color: var(--pink-orchid);
+        font-size: 11px;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+      `;
+    }
     btn.addEventListener('click', () => this.expand());
-    document.body.appendChild(btn);
+    (this.expandButtonContainer ?? document.body).appendChild(btn);
     this.expandButton = btn;
   }
 
@@ -173,6 +182,8 @@ export class SwathMiniMapViewer {
     if (!cesiumDiv) return;
 
     this.miniViewer = new Cesium.Viewer(cesiumDiv, {
+      clock: this.mainViewer.clock,
+      terrain: Cesium.Terrain.fromWorldTerrain(),
       animation: false,
       timeline: false,
       vrButton: false,
@@ -246,6 +257,7 @@ export class SwathMiniMapViewer {
         outline: true,
         outlineColor: Cesium.Color.YELLOW.withAlpha(0.9),
         outlineWidth: 2,
+        classificationType: Cesium.ClassificationType.TERRAIN,
         height: 0,
         extrudedHeight: 0,
       },
@@ -257,6 +269,7 @@ export class SwathMiniMapViewer {
 
     const removePostRender = this.mainViewer.scene.postRender.addEventListener(() => {
       this.updateMiniCamera();
+      this.miniViewer.scene.requestRender();
     });
 
     this.postRenderRemove = removePostRender;

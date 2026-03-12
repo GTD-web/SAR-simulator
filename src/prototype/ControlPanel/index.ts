@@ -7,6 +7,8 @@ import { SARSwathCalculator } from '../../poc/utils/sar-swath-calculator.js';
 export interface ControlPanelOptions {
   onRegionInfoFetched?: (data: import('./TargetSettings/index.js').RegionInfo) => void;
   regionInfoPanel?: HTMLElement | null;
+  /** 미니맵 열기 버튼을 추가할 컨테이너 (카메라 버튼 우측) */
+  miniMapExpandButtonContainer?: HTMLElement | null;
 }
 
 /**
@@ -118,7 +120,9 @@ export class ControlPanelManager {
 
     // 각 설정 클래스 초기화
     this.satelliteSettings = new SatelliteSettings();
-    this.satelliteSettings.initialize(satelliteTabContent, viewer);
+    this.satelliteSettings.initialize(satelliteTabContent, viewer, {
+      miniMapExpandButtonContainer: options?.miniMapExpandButtonContainer ?? null,
+    });
 
     this.orbitSettings = new OrbitSettings();
     this.orbitSettings.initialize(orbitTabContent, viewer, {

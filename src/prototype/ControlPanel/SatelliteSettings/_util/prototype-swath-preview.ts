@@ -32,8 +32,9 @@ export class PrototypeSwathPreview {
 
   /**
    * Swath 미리보기 엔티티 생성 (CallbackProperty로 실시간 갱신)
+   * @param expandButtonContainer 미니맵 열기 버튼을 추가할 컨테이너 (카메라 버튼 영역)
    */
-  init(): void {
+  init(expandButtonContainer?: HTMLElement | null): void {
     if (!this.viewer || !this.busPayloadManager) return;
 
     const defaultPositions = [
@@ -91,7 +92,11 @@ export class PrototypeSwathPreview {
     this.createBeamDirectionLines();
     this.createAntennaYAxisGroundLine();
 
-    this.swathMiniMap = new SwathMiniMapViewer(this.viewer, this.busPayloadManager);
+    this.swathMiniMap = new SwathMiniMapViewer(
+      this.viewer,
+      this.busPayloadManager,
+      expandButtonContainer ?? null
+    );
     this.swathMiniMap.init();
   }
 

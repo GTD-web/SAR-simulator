@@ -1,5 +1,11 @@
+import { SARSwathCalculator } from '../../../../poc/utils/sar-swath-calculator.js';
+import type { SwathCorners } from '../../../../poc/types/sar-swath.types.js';
 import type { SatelliteBusPayloadManager } from '../SatelliteBusPayloadManager/index.js';
 import { createAxisEntities } from '../SatelliteBusPayloadManager/_ui/axis-creator.js';
+
+/** Y축 지표면 접촉점 기준 swath 간격 (m) */
+const SWATH_SPACING_M = 5000;
+const CORNER_KEYS: Array<keyof SwathCorners> = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'];
 
 const MINI_MAP_SIZE = 360;
 const DEFAULT_CAMERA_OFFSET_M = 3;
@@ -12,6 +18,8 @@ const DEFAULT_ORIENTATION = Cesium.Quaternion.IDENTITY;
 const DEFAULT_DIMENSIONS = new Cesium.Cartesian3(1, 0.5, 0.5);
 const DEFAULT_ANTENNA_DIMENSIONS = new Cesium.Cartesian3(0.5, 0.5, 0.5);
 const AXIS_LENGTH = 1;
+/** 궤도 방향선 길이 (m). 미니맵에서 궤도 연결 표시 */
+const ORBIT_LINE_LENGTH_M = 100;
 
 /**
  * 위성 자세를 우측 하단에 보여주는 미니 3D 뷰
@@ -24,20 +32,30 @@ export class AttitudeMiniMapViewer {
   private satelliteEntity: any;
   private antennaEntity: any;
   private axisEntities: { xAxis: any; yAxis: any; zAxis: any; xLabel: any; yLabel: any; zLabel: any } | null;
+  private orbitLineEntity: any;
+  private swathLineEntities: any[];
   private postRenderRemove: (() => void) | null;
   private cameraOffsetM: number;
   private cameraWeights: { above: number; behind: number; left: number };
   private isCollapsed: boolean;
   private expandButton: HTMLElement | null;
+  private expandButtonContainer: HTMLElement | null;
 
-  constructor(mainViewer: any, busPayloadManager: SatelliteBusPayloadManager | null) {
+  constructor(
+    mainViewer: any,
+    busPayloadManager: SatelliteBusPayloadManager | null,
+    expandButtonContainer?: HTMLElement | null
+  ) {
     this.mainViewer = mainViewer;
     this.busPayloadManager = busPayloadManager;
+    this.expandButtonContainer = expandButtonContainer ?? null;
     this.miniContainer = null;
     this.miniViewer = null;
     this.satelliteEntity = null;
     this.antennaEntity = null;
     this.axisEntities = null;
+    this.orbitLineEntity = null;
+    this.swathLineEntities = [];
     this.postRenderRemove = null;
     this.cameraOffsetM = DEFAULT_CAMERA_OFFSET_M;
     this.cameraWeights = { ...DEFAULT_CAMERA_WEIGHTS };
@@ -73,6 +91,8 @@ export class AttitudeMiniMapViewer {
     this.createSatelliteEntity();
     this.createAntennaEntity();
     this.createAxisEntities();
+    this.createOrbitLine();
+    this.createSwathLines();
     this.setupCameraUpdate();
   }
 
@@ -174,23 +194,26 @@ export class AttitudeMiniMapViewer {
     btn.type = 'button';
     btn.textContent = 'Orientation';
     btn.title = '미니맵 열기';
-    btn.style.cssText = `
-      position: fixed;
-      bottom: 70px;
-      right: 12px;
-      width: 72px;
-      height: 28px;
-      z-index: 1000;
-      border: 2px solid var(--dusty-grape);
-      border-radius: 6px;
-      background: color-mix(in srgb, var(--dark-amethyst) 95%, transparent);
-      color: var(--pink-orchid);
-      font-size: 11px;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-    `;
+    btn.className = 'cam-btn-minimap-expand';
+    if (!this.expandButtonContainer) {
+      btn.style.cssText = `
+        position: fixed;
+        bottom: 70px;
+        right: 12px;
+        width: 72px;
+        height: 28px;
+        z-index: 1000;
+        border: 2px solid var(--dusty-grape);
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--dark-amethyst) 95%, transparent);
+        color: var(--pink-orchid);
+        font-size: 11px;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+      `;
+    }
     btn.addEventListener('click', () => this.expand());
-    document.body.appendChild(btn);
+    (this.expandButtonContainer ?? document.body).appendChild(btn);
     this.expandButton = btn;
   }
 
@@ -348,6 +371,107 @@ export class AttitudeMiniMapViewer {
     );
   }
 
+  /**
+   * 궤도 방향 연결선 (노란색) - 위성에서 궤도 진행 방향으로
+   */
+  private createOrbitLine(): void {
+    if (!this.miniViewer || !this.busPayloadManager || !this.mainViewer) return;
+
+    const busPayloadManager = this.busPayloadManager;
+    const mainViewer = this.mainViewer;
+
+    this.orbitLineEntity = this.miniViewer.entities.add({
+      name: 'AttitudeMiniMapOrbitLine',
+      polyline: {
+        positions: new Cesium.CallbackProperty(() => {
+          const busPos = busPayloadManager.getBusCartesian();
+          const velOpt = busPayloadManager.getVelocityOptions();
+          if (!busPos || !velOpt?.velocityEcef) return [DEFAULT_POSITION, DEFAULT_POSITION];
+
+          const v = velOpt.velocityEcef;
+          const velDir = new Cesium.Cartesian3(v.x, v.y, v.z);
+          const halfLen = ORBIT_LINE_LENGTH_M / 2;
+          const forward = Cesium.Cartesian3.add(
+            busPos,
+            Cesium.Cartesian3.multiplyByScalar(velDir, halfLen, new Cesium.Cartesian3()),
+            new Cesium.Cartesian3()
+          );
+          const backward = Cesium.Cartesian3.subtract(
+            busPos,
+            Cesium.Cartesian3.multiplyByScalar(velDir, halfLen, new Cesium.Cartesian3()),
+            new Cesium.Cartesian3()
+          );
+          return [backward, forward];
+        }, false),
+        width: 2,
+        material: Cesium.Color.ORANGE.withAlpha(0.9),
+        clampToGround: false,
+        arcType: Cesium.ArcType.NONE,
+        show: new Cesium.CallbackProperty(
+          () =>
+            !!busPayloadManager?.getBusEntity?.() &&
+            !!busPayloadManager?.getVelocityOptions?.()?.velocityEcef,
+          false
+        ),
+      },
+    });
+  }
+
+  /**
+   * Swath 연결선 (노란색) - 안테나에서 지표면 swath 4개 모서리로
+   */
+  private createSwathLines(): void {
+    if (!this.miniViewer || !this.busPayloadManager || !this.mainViewer) return;
+
+    const busPayloadManager = this.busPayloadManager;
+
+    CORNER_KEYS.forEach((cornerKey, index) => {
+      const lineEntity = this.miniViewer.entities.add({
+        name: `AttitudeMiniMapSwathLine_${index}`,
+        polyline: {
+          positions: new Cesium.CallbackProperty(() => {
+            const antennaPos = busPayloadManager.getAntennaCartesian();
+            const groundPoint = busPayloadManager.getYAxisGroundPoint?.();
+            const pos = busPayloadManager.getPositionForSwath?.();
+            if (!antennaPos || !groundPoint || !pos) return [DEFAULT_POSITION, DEFAULT_POSITION];
+
+            const halfSpacing = SWATH_SPACING_M / 2;
+            const geometry = {
+              centerLat: groundPoint.latitude,
+              centerLon: groundPoint.longitude,
+              heading: pos.heading,
+              nearRange: -halfSpacing,
+              farRange: halfSpacing,
+              swathWidth: SWATH_SPACING_M,
+              azimuthLength: SWATH_SPACING_M,
+              satelliteAltitude: pos.altitude,
+            };
+
+            try {
+              const corners = SARSwathCalculator.calculateSwathCorners(geometry);
+              const corner = corners[cornerKey];
+              const cornerPosition = Cesium.Cartesian3.fromDegrees(corner[0], corner[1], 0);
+              return [antennaPos, cornerPosition];
+            } catch {
+              return [antennaPos, groundPoint.cartesian];
+            }
+          }, false),
+          width: 2,
+          material: Cesium.Color.YELLOW.withAlpha(0.9),
+          clampToGround: false,
+          arcType: Cesium.ArcType.NONE,
+          show: new Cesium.CallbackProperty(
+            () =>
+              !!busPayloadManager?.getAntennaEntity?.() &&
+              !!busPayloadManager?.getYAxisGroundPoint?.(),
+            false
+          ),
+        },
+      });
+      this.swathLineEntities.push(lineEntity);
+    });
+  }
+
   private setupCameraUpdate(): void {
     if (!this.miniViewer || !this.mainViewer || !this.busPayloadManager) return;
 
@@ -479,6 +603,12 @@ export class AttitudeMiniMapViewer {
           this.miniViewer.entities.remove(this.axisEntities.yLabel);
           this.miniViewer.entities.remove(this.axisEntities.zLabel);
         }
+        if (this.orbitLineEntity) {
+          this.miniViewer.entities.remove(this.orbitLineEntity);
+        }
+        this.swathLineEntities.forEach((entity) => {
+          this.miniViewer.entities.remove(entity);
+        });
         this.miniViewer.destroy();
       } catch {
         // 무시
@@ -487,6 +617,8 @@ export class AttitudeMiniMapViewer {
       this.satelliteEntity = null;
       this.antennaEntity = null;
       this.axisEntities = null;
+      this.orbitLineEntity = null;
+      this.swathLineEntities = [];
     }
 
     if (this.miniContainer?.parentNode) {

@@ -65,14 +65,23 @@ export class SatelliteSettings {
   /**
    * Initialize satellite settings tab
    */
-  initialize(container: HTMLElement, viewer?: any): void {
+  initialize(
+    container: HTMLElement,
+    viewer?: any,
+    options?: { miniMapExpandButtonContainer?: HTMLElement | null }
+  ): void {
     this.container = container;
     this.viewer = viewer || null;
+    const expandButtonContainer = options?.miniMapExpandButtonContainer ?? null;
     if (this.viewer) {
       this.busPayloadManager = new SatelliteBusPayloadManager(this.viewer);
       this.swathPreview = new PrototypeSwathPreview(this.viewer, this.busPayloadManager);
-      this.swathPreview.init();
-      this.attitudeMiniMap = new AttitudeMiniMapViewer(this.viewer, this.busPayloadManager);
+      this.swathPreview.init(expandButtonContainer);
+      this.attitudeMiniMap = new AttitudeMiniMapViewer(
+        this.viewer,
+        this.busPayloadManager,
+        expandButtonContainer
+      );
       this.attitudeMiniMap.init();
     }
     this.render();

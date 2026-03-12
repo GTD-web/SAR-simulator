@@ -411,6 +411,16 @@ const terrain = {
     container.appendChild(btnSatellite);
     container.appendChild(btnEarth);
     container.appendChild(btnSwath);
+
+    const miniMapExpandContainer = document.createElement('div');
+    miniMapExpandContainer.id = 'miniMapExpandButtonContainer';
+    miniMapExpandContainer.style.display = 'flex';
+    miniMapExpandContainer.style.gap = '10px';
+    miniMapExpandContainer.style.marginLeft = '8px';
+    miniMapExpandContainer.style.paddingLeft = '8px';
+    miniMapExpandContainer.style.borderLeft = '1px solid var(--dusty-grape)';
+    container.appendChild(miniMapExpandContainer);
+
     document.body.appendChild(container);
 
     this.injectCameraButtonStyles();
@@ -673,15 +683,16 @@ const terrain = {
       // 5. 우측 지역 정보 패널 생성 (초기 숨김)
       this.createRegionInfoPanel();
 
-      // 6. 제어 패널 초기화 (콜백 및 패널 ref 전달)
+      // 6. 하단 카메라 이동 버튼 (미니맵 열기 버튼 컨테이너 포함, 제어 패널보다 먼저 생성)
+      this.createCameraButtons();
+
+      // 7. 제어 패널 초기화 (콜백 및 패널 ref 전달)
       this.controlPanelManager = new ControlPanelManager();
       this.controlPanelManager.initialize(this.viewer, {
         onRegionInfoFetched: this.updateRegionInfoPanel.bind(this),
         regionInfoPanel: this.regionInfoPanel,
+        miniMapExpandButtonContainer: document.getElementById('miniMapExpandButtonContainer'),
       });
-
-      // 7. 하단 카메라 이동 버튼
-      this.createCameraButtons();
 
       // 8. 지도 우클릭 컨텍스트 메뉴 (경·위도 표시, 해당 위치로 타겟 설정)
       const canvas = this.viewer.scene.canvas;
