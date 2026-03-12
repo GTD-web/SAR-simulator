@@ -6,7 +6,6 @@ import { SARSwathCalculator } from '../../poc/utils/sar-swath-calculator.js';
 
 export interface ControlPanelOptions {
   onRegionInfoFetched?: (data: import('./TargetSettings/index.js').RegionInfo) => void;
-  regionInfoPanel?: HTMLElement | null;
   /** 미니맵 열기 버튼을 추가할 컨테이너 (카메라 버튼 우측) */
   miniMapExpandButtonContainer?: HTMLElement | null;
 }
@@ -21,7 +20,6 @@ export class ControlPanelManager {
   private orbitSettings: OrbitSettings | null;
   private targetSettings: TargetSettings | null;
   private viewer: any;
-  private regionInfoPanel: HTMLElement | null;
 
   constructor() {
     this.sidebar = null;
@@ -30,14 +28,12 @@ export class ControlPanelManager {
     this.orbitSettings = null;
     this.targetSettings = null;
     this.viewer = null;
-    this.regionInfoPanel = null;
   }
 
   /**
    * 제어 패널 초기화
    */
   initialize(viewer?: any, options?: ControlPanelOptions): void {
-    this.regionInfoPanel = options?.regionInfoPanel ?? null;
     this.createControlPanel(viewer, options);
     this.setupStyles();
   }
@@ -110,10 +106,21 @@ export class ControlPanelManager {
     orbitTabContent.style.paddingTop = '0';
     tabContainer.appendChild(orbitTabContent);
 
-    // 타겟 설정 탭 콘텐츠
+    // 타겟 설정 탭 콘텐츠 — 2단 사이드바 (좌: AOI 폼, 우: 지역 정보)
     const targetTabContent = document.createElement('div');
     targetTabContent.id = 'targetTab';
-    targetTabContent.className = 'tab-content';
+    targetTabContent.className = 'tab-content target-tab-two-tier';
+
+    const targetFormColumn = document.createElement('div');
+    targetFormColumn.className = 'target-form-column';
+
+    const targetRegionColumn = document.createElement('div');
+    targetRegionColumn.id = 'targetGeoDataContent';
+    targetRegionColumn.className = 'target-geo-data-content target-region-column';
+    targetRegionColumn.innerHTML = '<p class="target-geo-data-placeholder">타겟을 설정한 뒤 \'Fetch Region Info\'를 누르세요.</p>';
+
+    targetTabContent.appendChild(targetFormColumn);
+    targetTabContent.appendChild(targetRegionColumn);
     tabContainer.appendChild(targetTabContent);
 
     this.sidebarContent.appendChild(tabContainer);
@@ -135,13 +142,16 @@ export class ControlPanelManager {
       busPayloadManager: this.satelliteSettings.getBusPayloadManager(),
     };
     this.targetSettings = new TargetSettings();
-    this.targetSettings.initialize(targetTabContent, viewer, targetOptions);
+    this.targetSettings.initialize(targetFormColumn, viewer, targetOptions);
 
     // 탭 전환 이벤트 설정
     this.setupTabEvents();
 
-    // 기본으로 위성 설정 탭 활성화 (서버 초기화 시)
-    this.activateTab('satellite');
+    // localStorage에 저장된 탭 복원, 없으면 satellite
+    const savedTab = localStorage.getItem('prototype_active_tab');
+    const initialTab = savedTab === 'orbit' || savedTab === 'target' ? savedTab : 'satellite';
+    this.activateTab(initialTab);
+    this.runTabActivationLogic(initialTab);
 
     // 프로토타입 로드 완료 후 사이드바 표시
     const sidebar = document.getElementById('sidebar');
@@ -172,37 +182,39 @@ export class ControlPanelManager {
           targetContent.classList.add('active');
         }
 
-        // 위성 설정 탭 클릭 시 (카메라 이동 없음)
-        if (targetTab === 'satellite' && this.satelliteSettings) {
-          this.satelliteSettings.cancelCameraAnimation();
+        // AOI 탭일 때 사이드바 확장 (2단 레이아웃용)
+        this.sidebar?.classList.toggle('sidebar-aoi-expanded', targetTab === 'target');
+
+        // 선택한 탭을 localStorage에 저장
+        if (targetTab) {
+          localStorage.setItem('prototype_active_tab', targetTab);
         }
 
-        // 궤도 설정 탭 클릭 시 엔티티만 생성 (카메라 이동 없음)
-        if (targetTab === 'orbit' && this.viewer) {
-          if (this.satelliteSettings) {
-            this.satelliteSettings.cancelCameraAnimation();
-            this.satelliteSettings.ensureEntityExists();
-          }
-          this.orbitSettings?.prepareOrbitTab();
-        }
-
-        // 타겟 설정 탭 클릭 시 우측 지역 정보 패널 표시 (카메라 이동 없음)
-        if (targetTab === 'target' && this.targetSettings) {
-          this.orbitSettings?.stopCameraTracking();
-          if (this.satelliteSettings) {
-            this.satelliteSettings.cancelCameraAnimation();
-          }
-          if (this.regionInfoPanel) {
-            this.regionInfoPanel.classList.remove('hidden');
-          }
-        } else {
-          // 다른 탭으로 전환 시 우측 지역 정보 패널 숨김
-          if (this.regionInfoPanel) {
-            this.regionInfoPanel.classList.add('hidden');
-          }
-        }
+        this.runTabActivationLogic(targetTab ?? '');
       });
     });
+  }
+
+  /**
+   * 탭별 활성화 로직 (클릭/복원 시 공통)
+   */
+  private runTabActivationLogic(targetTab: string): void {
+    if (targetTab === 'satellite' && this.satelliteSettings) {
+      this.satelliteSettings.cancelCameraAnimation();
+    }
+    if (targetTab === 'orbit' && this.viewer) {
+      if (this.satelliteSettings) {
+        this.satelliteSettings.cancelCameraAnimation();
+        this.satelliteSettings.ensureEntityExists();
+      }
+      this.orbitSettings?.prepareOrbitTab();
+    }
+    if (targetTab === 'target' && this.targetSettings) {
+      this.orbitSettings?.stopCameraTracking();
+      if (this.satelliteSettings) {
+        this.satelliteSettings.cancelCameraAnimation();
+      }
+    }
   }
 
   /**
@@ -237,6 +249,7 @@ export class ControlPanelManager {
     if (targetContent) {
       targetContent.classList.add('active');
     }
+    this.sidebar?.classList.toggle('sidebar-aoi-expanded', tabId === 'target');
   }
 
   /**

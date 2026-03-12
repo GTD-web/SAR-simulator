@@ -116,6 +116,10 @@ html, body, #cesiumContainer {
   transition: all 0.3s ease;
 }
 
+#sidebar.sidebar-aoi-expanded {
+  width: 550px;
+}
+
 /* 두 번째 사이드바 (Swath 그룹) - 왼쪽 제어 패널 옆에 배치 */
 #swathGroupsSidebar {
   position: fixed;
@@ -579,6 +583,8 @@ html, body, #cesiumContainer {
 /* 스크롤바 스타일 - 어두운 테마 */
 #sidebarContent::-webkit-scrollbar,
 .tab-content::-webkit-scrollbar,
+.target-form-column::-webkit-scrollbar,
+.target-region-column::-webkit-scrollbar,
 #signalResultsContent::-webkit-scrollbar,
 #swathGroupsContent::-webkit-scrollbar {
   width: 10px;
@@ -586,6 +592,8 @@ html, body, #cesiumContainer {
 
 #sidebarContent::-webkit-scrollbar-track,
 .tab-content::-webkit-scrollbar-track,
+.target-form-column::-webkit-scrollbar-track,
+.target-region-column::-webkit-scrollbar-track,
 #signalResultsContent::-webkit-scrollbar-track,
 #swathGroupsContent::-webkit-scrollbar-track {
   background: color-mix(in srgb, var(--dark-amethyst) 60%, transparent);
@@ -594,6 +602,8 @@ html, body, #cesiumContainer {
 
 #sidebarContent::-webkit-scrollbar-thumb,
 .tab-content::-webkit-scrollbar-thumb,
+.target-form-column::-webkit-scrollbar-thumb,
+.target-region-column::-webkit-scrollbar-thumb,
 #signalResultsContent::-webkit-scrollbar-thumb,
 #swathGroupsContent::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--lilac) 60%, transparent);
@@ -603,6 +613,8 @@ html, body, #cesiumContainer {
 
 #sidebarContent::-webkit-scrollbar-thumb:hover,
 .tab-content::-webkit-scrollbar-thumb:hover,
+.target-form-column::-webkit-scrollbar-thumb:hover,
+.target-region-column::-webkit-scrollbar-thumb:hover,
 #signalResultsContent::-webkit-scrollbar-thumb:hover,
 #swathGroupsContent::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--lilac) 85%, transparent);
@@ -611,6 +623,8 @@ html, body, #cesiumContainer {
 
 #sidebarContent::-webkit-scrollbar-thumb:active,
 .tab-content::-webkit-scrollbar-thumb:active,
+.target-form-column::-webkit-scrollbar-thumb:active,
+.target-region-column::-webkit-scrollbar-thumb:active,
 #signalResultsContent::-webkit-scrollbar-thumb:active,
 #swathGroupsContent::-webkit-scrollbar-thumb:active {
   background: var(--pink-orchid);
@@ -899,5 +913,25 @@ html, body, #cesiumContainer {
 
 .tab-content.active {
   display: block;
+}
+
+/* AOI 탭 2단 사이드바 (좌: 폼, 우: 지역 정보) */
+.tab-content.target-tab-two-tier.active {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  padding: 12px;
+}
+.target-form-column {
+  flex: 0 0 200px;
+  min-width: 0;
+  overflow-y: auto;
+}
+.target-region-column {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--dusty-grape);
+  padding-left: 12px;
 }
 

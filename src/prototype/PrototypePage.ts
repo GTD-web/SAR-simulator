@@ -15,7 +15,6 @@ export class PrototypePage {
   private viewerManager: CesiumViewerManager | null;
   private viewer: any;
   private controlPanelManager: ControlPanelManager | null;
-  private regionInfoPanel: HTMLElement | null;
   private lastRegionInfo: RegionInfo | null;
   private mapContextMenuEl: HTMLElement | null;
   private mapContextMenuClose: (() => void) | null;
@@ -24,77 +23,24 @@ export class PrototypePage {
     this.viewerManager = null;
     this.viewer = null;
     this.controlPanelManager = null;
-    this.regionInfoPanel = null;
     this.lastRegionInfo = null;
     this.mapContextMenuEl = null;
     this.mapContextMenuClose = null;
   }
 
   /**
-   * 우측 지역 정보 패널 DOM 생성 (초기 숨김)
-   */
-  private createRegionInfoPanel(): void {
-    const existing = document.getElementById('targetGeoDataSidebar');
-    if (existing) existing.remove();
-
-    const panel = document.createElement('div');
-    panel.id = 'targetGeoDataSidebar';
-    panel.className = 'target-geo-data-sidebar hidden';
-
-    const header = document.createElement('div');
-    header.className = 'target-geo-data-header';
-    header.textContent = '타겟 지역 정보';
-    panel.appendChild(header);
-
-    const content = document.createElement('div');
-    content.id = 'targetGeoDataContent';
-    content.className = 'target-geo-data-content';
-    content.innerHTML = '<p class="target-geo-data-placeholder">타겟을 설정한 뒤 \'지역 정보 가져오기\'를 누르세요.</p>';
-    panel.appendChild(content);
-
-    this.injectRegionInfoPanelStyles();
-    document.body.appendChild(panel);
-    this.regionInfoPanel = panel;
-  }
-
-  /**
-   * 우측 패널용 스타일 주입
+   * 2단 사이드바 내 지역 정보 컬럼용 스타일 주입
    */
   private injectRegionInfoPanelStyles(): void {
     if (document.getElementById('targetGeoDataSidebarStyles')) return;
     const style = document.createElement('style');
     style.id = 'targetGeoDataSidebarStyles';
     style.textContent = `
-      .target-geo-data-sidebar {
-        position: fixed;
-        right: 0;
-        top: 0;
-        bottom: 0;
-        width: 320px;
-        background: rgba(30, 30, 30, 0.95);
-        color: #eee;
-        font-family: sans-serif;
-        z-index: 1000;
-        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.3);
-        border-left: 1px solid #555;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-      }
-      .target-geo-data-sidebar.hidden {
-        display: none;
-      }
-      .target-geo-data-header {
-        padding: 12px 16px;
-        font-size: 16px;
-        font-weight: 600;
-        border-bottom: 1px solid #444;
-        flex-shrink: 0;
-      }
       .target-geo-data-content {
-        padding: 16px;
+        padding: 12px;
         overflow-y: auto;
-        font-size: 13px;
+        font-size: 12px;
+        color: #eee;
       }
       .target-geo-data-placeholder {
         color: #aaa;
@@ -687,17 +633,16 @@ const terrain = {
         orientation: { direction, up: north },
       });
 
-      // 5. 우측 지역 정보 패널 생성 (초기 숨김)
-      this.createRegionInfoPanel();
+      // 5. 지역 정보 패널용 스타일 주입 (2단 사이드바 내 우측 컬럼에 사용)
+      this.injectRegionInfoPanelStyles();
 
       // 6. 하단 카메라 이동 버튼 (미니맵 열기 버튼 컨테이너 포함, 제어 패널보다 먼저 생성)
       this.createCameraButtons();
 
-      // 7. 제어 패널 초기화 (콜백 및 패널 ref 전달)
+      // 7. 제어 패널 초기화 (2단 사이드바 내 지역 정보는 targetGeoDataContent에 표시)
       this.controlPanelManager = new ControlPanelManager();
       this.controlPanelManager.initialize(this.viewer, {
         onRegionInfoFetched: this.updateRegionInfoPanel.bind(this),
-        regionInfoPanel: this.regionInfoPanel,
         miniMapExpandButtonContainer: document.getElementById('miniMapExpandButtonContainer'),
       });
 
@@ -740,10 +685,6 @@ const terrain = {
       this.controlPanelManager = null;
     }
 
-    // 우측 지역 정보 패널 제거
-    const panel = document.getElementById('targetGeoDataSidebar');
-    if (panel) panel.remove();
-    this.regionInfoPanel = null;
     const styleEl = document.getElementById('targetGeoDataSidebarStyles');
     if (styleEl) styleEl.remove();
 
