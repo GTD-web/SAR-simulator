@@ -444,6 +444,9 @@ const terrain = {
         z-index: 500;
         pointer-events: none;
       }
+      #miniMapExpandButtonContainer:empty {
+        display: none;
+      }
       #cameraControlButtons button {
         pointer-events: all;
         display: inline-flex;
