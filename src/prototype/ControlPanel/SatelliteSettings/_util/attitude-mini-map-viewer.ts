@@ -94,6 +94,9 @@ export class AttitudeMiniMapViewer {
     this.createOrbitLine();
     this.createSwathLines();
     this.setupCameraUpdate();
+    if (this.expandButtonContainer) {
+      this.createToggleButton();
+    }
   }
 
   private createMiniMapContainer(): void {
@@ -177,44 +180,48 @@ export class AttitudeMiniMapViewer {
     if (!this.miniContainer) return;
     this.isCollapsed = true;
     this.miniContainer.style.display = 'none';
-    this.createExpandButton();
+    this.updateToggleButtonState();
   }
 
   private expand(): void {
     this.isCollapsed = false;
-    this.removeExpandButton();
     if (this.miniContainer) {
       this.miniContainer.style.display = '';
     }
+    this.updateToggleButtonState();
   }
 
-  private createExpandButton(): void {
-    this.removeExpandButton();
+  private toggle(): void {
+    if (this.isCollapsed) {
+      this.expand();
+    } else {
+      this.collapse();
+    }
+  }
+
+  private createToggleButton(): void {
+    if (!this.expandButtonContainer || this.expandButton) return;
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.textContent = 'Orientation';
-    btn.title = '미니맵 열기';
-    btn.className = 'cam-btn-minimap-expand';
-    if (!this.expandButtonContainer) {
-      btn.style.cssText = `
-        position: fixed;
-        bottom: 70px;
-        right: 12px;
-        width: 72px;
-        height: 28px;
-        z-index: 1000;
-        border: 2px solid var(--dusty-grape);
-        border-radius: 6px;
-        background: color-mix(in srgb, var(--dark-amethyst) 95%, transparent);
-        color: var(--pink-orchid);
-        font-size: 11px;
-        cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-      `;
-    }
-    btn.addEventListener('click', () => this.expand());
-    (this.expandButtonContainer ?? document.body).appendChild(btn);
+    btn.title = '미니맵 토글';
+    btn.className = 'cam-btn-minimap-toggle';
+    btn.dataset.minimap = 'orientation';
+    btn.addEventListener('click', () => this.toggle());
+    this.expandButtonContainer.appendChild(btn);
     this.expandButton = btn;
+    this.updateToggleButtonState();
+  }
+
+  private updateToggleButtonState(): void {
+    if (!this.expandButton) return;
+    if (this.isCollapsed) {
+      this.expandButton.classList.remove('active');
+      this.expandButton.title = '미니맵 열기';
+    } else {
+      this.expandButton.classList.add('active');
+      this.expandButton.title = '미니맵 닫기';
+    }
   }
 
   private removeExpandButton(): void {

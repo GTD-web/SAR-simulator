@@ -408,16 +408,15 @@ const terrain = {
       this.controlPanelManager?.flyToSwath();
     });
 
-    container.appendChild(btnSatellite);
     container.appendChild(btnEarth);
+    container.appendChild(btnSatellite);
     container.appendChild(btnSwath);
 
     const miniMapExpandContainer = document.createElement('div');
     miniMapExpandContainer.id = 'miniMapExpandButtonContainer';
     miniMapExpandContainer.style.display = 'flex';
     miniMapExpandContainer.style.gap = '10px';
-    miniMapExpandContainer.style.marginLeft = '8px';
-    miniMapExpandContainer.style.paddingLeft = '8px';
+    miniMapExpandContainer.style.paddingLeft = '10px';
     miniMapExpandContainer.style.borderLeft = '1px solid var(--dusty-grape)';
     container.appendChild(miniMapExpandContainer);
 
@@ -446,6 +445,11 @@ const terrain = {
       }
       #miniMapExpandButtonContainer:empty {
         display: none;
+      }
+      #miniMapExpandButtonContainer .cam-btn-minimap-toggle.active {
+        background: var(--dusty-grape);
+        color: #fff;
+        border-color: var(--lilac);
       }
       #cameraControlButtons button {
         pointer-events: all;

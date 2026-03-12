@@ -749,7 +749,7 @@ export class OrbitSettings {
       const startTime = epochTime;
       const stopTime = Cesium.JulianDate.addSeconds(
         epochTime,
-        2 * periodSeconds,
+        10 * periodSeconds,
         new Cesium.JulianDate()
       );
       if (this.viewer.clock) {
