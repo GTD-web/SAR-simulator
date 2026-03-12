@@ -76,13 +76,14 @@ export class SatelliteSettings {
     if (this.viewer) {
       this.busPayloadManager = new SatelliteBusPayloadManager(this.viewer);
       this.swathPreview = new PrototypeSwathPreview(this.viewer, this.busPayloadManager);
-      this.swathPreview.init(expandButtonContainer);
       this.attitudeMiniMap = new AttitudeMiniMapViewer(
         this.viewer,
         this.busPayloadManager,
         expandButtonContainer
       );
+      // Orientation, AOI 순으로 미니맵 토글 버튼 배치
       this.attitudeMiniMap.init();
+      this.swathPreview.init(expandButtonContainer);
     }
     this.render();
     
