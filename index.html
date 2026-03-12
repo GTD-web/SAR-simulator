@@ -575,6 +575,39 @@
         }
       });
     }
+// ==================== [수치 기억하기: 절대 방어 버전] ====================
+    // 1. 사용자가 새로고침(F5)을 누르는 '바로 그 순간' 화면의 모든 값을 금고에 싹 다 저장!
+    window.addEventListener('beforeunload', () => {
+      const inputs = document.querySelectorAll('#sidebarContent input, #sidebarContent select, #sidebarContent textarea');
+      inputs.forEach(input => {
+        if (input.id) {
+          const valueToSave = input.type === 'checkbox' ? input.checked : input.value;
+          localStorage.setItem('sar_sim_final_' + input.id, valueToSave);
+        }
+      });
+    });
+
+    // 2. 새로고침 후, App.js가 기본값 세팅을 다 끝낼 때까지 1.5초(1500ms) 기다렸다가 기습 덮어쓰기!
+    setTimeout(() => {
+      const inputs = document.querySelectorAll('#sidebarContent input, #sidebarContent select, #sidebarContent textarea');
+      inputs.forEach(input => {
+        if (!input.id) return;
+        
+        const savedValue = localStorage.getItem('sar_sim_final_' + input.id);
+        if (savedValue !== null) {
+          if (input.type === 'checkbox') {
+            input.checked = (savedValue === 'true');
+          } else {
+            input.value = savedValue;
+          }
+          // 시뮬레이터 본체에게 "야! 나 값 바꿨어 작동해!" 라고 강제로 신호 보내기
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    }, 1500); // 1.5초 대기
+    // =========================================================================
+  
   </script>
 </body>
 </html>
