@@ -16,10 +16,83 @@ html, body, #cesiumContainer {
 }
 
 
-/* Cesium 타임라인 (시뮬레이션 시간 컨트롤) - 화면 하단 */
+/* Cesium 타임라인 (시뮬레이션 시간 컨트롤) - 화면 하단 - Amethyst 테마 */
 .cesium-viewer-timelineContainer,
 .cesium-viewer-animationContainer {
   z-index: 999;
+}
+
+/* 시뮬레이션 컨트롤러 - 애니메이션(재생 링)은 투명, 타임라인은 배경 적용 */
+.cesium-viewer-animationContainer {
+  background: transparent !important;
+}
+
+.cesium-viewer-timelineContainer {
+  background: color-mix(in srgb, var(--dark-amethyst) 90%, transparent) !important;
+}
+
+.cesium-timeline-main {
+  border-color: var(--dusty-grape) !important;
+}
+
+.cesium-timeline-trackContainer {
+  border-top-color: var(--dusty-grape) !important;
+}
+
+.cesium-timeline-bar {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--dusty-grape) 70%, transparent) 0%,
+    color-mix(in srgb, var(--dark-amethyst) 85%, transparent) 100%
+  ) !important;
+}
+
+.cesium-timeline-needle {
+  background: var(--pink-orchid) !important;
+}
+
+.cesium-timeline-highlight {
+  background: var(--lilac) !important;
+}
+
+.cesium-timeline-ticLabel {
+  color: var(--pink-orchid) !important;
+}
+
+.cesium-timeline-ticMain,
+.cesium-timeline-ticSub,
+.cesium-timeline-ticTiny {
+  background: var(--amethyst-smoke) !important;
+}
+
+/* 애니메이션 컨트롤 (재생/일시정지 링) - 배경 투명 */
+.cesium-animation-shuttleRingBack {
+  fill: transparent !important;
+  stroke: var(--dusty-grape) !important;
+}
+
+.cesium-animation-shuttleRingSwoosh line {
+  stroke: var(--lilac) !important;
+}
+
+.cesium-animation-svgText {
+  fill: var(--pink-orchid) !important;
+}
+
+.cesium-animation-rectButton .cesium-animation-buttonPath {
+  fill: var(--pink-orchid) !important;
+}
+
+.cesium-animation-rectButton .cesium-animation-buttonMain {
+  stroke: var(--dusty-grape) !important;
+}
+
+.cesium-animation-rectButton:hover .cesium-animation-buttonMain {
+  stroke: var(--lilac) !important;
+}
+
+.cesium-animation-knobOuter {
+  stroke: var(--dusty-grape) !important;
 }
 
 /* 사이드바 스타일 - 위아래 여백이 있는 플로팅 디자인 (하단 여백으로 시뮬레이션 버튼 노출) */
@@ -828,7 +901,7 @@ html, body, #cesiumContainer {
   display: block;
 }
 
-/* 위성으로 이동 버튼 (화면 하단 중앙, 타임라인 위) */
+/* 위성으로 이동 버튼 (화면 하단 중앙, 타임라인 위) - Amethyst 테마 */
 .fly-to-satellite-button {
   position: fixed;
   left: 50%;
@@ -841,9 +914,9 @@ html, body, #cesiumContainer {
   width: 44px;
   height: 44px;
   padding: 0;
-  background: rgba(42, 42, 42, 0.95);
-  color: white;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: color-mix(in srgb, var(--dark-amethyst) 98%, transparent);
+  color: var(--pink-orchid);
+  border: 2px solid var(--dusty-grape);
   border-radius: 50%;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -855,8 +928,17 @@ html, body, #cesiumContainer {
 }
 
 .fly-to-satellite-button:hover {
-  background: rgba(60, 60, 60, 0.95);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: color-mix(in srgb, var(--lilac) 30%, var(--dark-amethyst));
+  border-color: var(--lilac);
+  color: var(--pink-orchid);
   transform: translateX(-50%) translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--lilac) 40%, transparent);
+}
+
+/* 위성 고정 중일 때 강조 표시 */
+.fly-to-satellite-button.tracking {
+  background: color-mix(in srgb, var(--pink-orchid) 25%, var(--dark-amethyst));
+  border-color: var(--pink-orchid);
+  color: var(--pink-orchid);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--pink-orchid) 50%, transparent);
 }

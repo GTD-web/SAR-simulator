@@ -24,11 +24,11 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    fullscreen: true, // 시작 시 전체화면
     autoHideMenuBar: true, // 상단 메뉴바 숨기기
     titleBarOverlay: {
       color: '#2a2a2a', // 어두운 배경색
       symbolColor: '#ffffff', // 아이콘 색상 (흰색)
-      height: 30 // 타이틀바 높이
     },
     webPreferences: {
       nodeIntegration: false,
