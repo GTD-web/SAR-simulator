@@ -693,12 +693,12 @@ export class OrbitSettings {
    */
   applyOrbitToSatellite(showAlert = true, startSimulation = true): void {
     if (!this.viewer) {
-      if (showAlert) alert('Cesium 뷰어가 초기화되지 않았습니다.');
+      if (showAlert) alert('Cesium viewer is not initialized.');
       return;
     }
 
     if (!this.busPayloadManager || !this.busPayloadManager.getBusEntity()) {
-      if (showAlert) alert('위성 설정 탭에서 먼저 위성을 생성해주세요.');
+      if (showAlert) alert('Please create a satellite first in the Satellite tab.');
       return;
     }
 
@@ -707,7 +707,7 @@ export class OrbitSettings {
       if (!parsed) {
         if (showAlert) {
           alert(
-            '긴반지름은 지구 반지름(6378.137km)보다 커야 하고, 이심률은 0 이상 1 미만이어야 합니다.'
+            'Semi-major axis must be greater than Earth radius (6378.137 km), and eccentricity must be between 0 and 1 (exclusive).'
           );
         }
         return;
@@ -716,7 +716,7 @@ export class OrbitSettings {
       const { elements, epochTime } = parsed;
       const tle = orbitalElementsToTLE(elements, epochTime, 'Orbit6Elements', 99999);
       if (!tle) {
-        if (showAlert) alert('TLE 생성에 실패했습니다.');
+        if (showAlert) alert('Failed to generate TLE.');
         return;
       }
       this.currentTLE = tle;
@@ -724,7 +724,7 @@ export class OrbitSettings {
 
       const result = getPositionFromTLE(tle, epochTime);
       if (!result) {
-        if (showAlert) alert('해당 시각의 궤도 위치·속도 계산에 실패했습니다.');
+        if (showAlert) alert('Failed to calculate orbit position and velocity for the specified time.');
         return;
       }
 
@@ -792,13 +792,13 @@ export class OrbitSettings {
       );
       if (showAlert) {
         alert(
-          `해당 시각의 궤도 위치에 위성을 배치했습니다.\n진행 방향이 위성 X축과 일치합니다.\n궤도 주기: ${periodHours.toFixed(2)}시간`
+          `Satellite placed at epoch orbit position.\nPropagation direction matches satellite X-axis.\nOrbital period: ${periodHours.toFixed(2)} hours`
         );
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       console.error('[OrbitSettings] 위성 배치 오류:', error);
-      if (showAlert) alert('위성 배치 실패: ' + message);
+      if (showAlert) alert('Satellite placement failed: ' + message);
     }
   }
 

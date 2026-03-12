@@ -13,6 +13,7 @@ export const ORBIT_FORM_IDS = {
   ARGUMENT_OF_PERIGEE: 'prototypeOrbitArgumentOfPerigee',
   ANOMALY_TYPE: 'prototypeOrbitAnomalyType',
   ANOMALY: 'prototypeOrbitAnomaly',
+  INITIAL_DATE: 'prototypeOrbitInitialDate',
   INITIAL_TIME: 'prototypeOrbitInitialTime',
 } as const;
 
@@ -64,15 +65,21 @@ export function getElementsAndEpochTimeFromForm(
     elements.meanAnomaly = anomaly;
   }
   const initialDateStr = (
+    root.querySelector(`#${ORBIT_FORM_IDS.INITIAL_DATE}`) as HTMLInputElement
+  )?.value?.trim();
+  const initialTimeStr = (
     root.querySelector(`#${ORBIT_FORM_IDS.INITIAL_TIME}`) as HTMLInputElement
   )?.value?.trim();
-  // date 값(YYYY-MM-DD)은 해당 날짜 00:00 UTC로 해석
-  const utcMidnightStr = initialDateStr ? `${initialDateStr}T00:00:00Z` : '';
-  const initialDateValid =
-    utcMidnightStr !== '' &&
-    !Number.isNaN(new Date(utcMidnightStr).getTime());
-  const epochTime = initialDateValid
-    ? Cesium.JulianDate.fromDate(new Date(utcMidnightStr))
+  // date(YYYY-MM-DD) + time(HH:mm 또는 HH:mm:ss) → UTC ISO 문자열
+  const timePart = initialTimeStr && /^\d{1,2}:\d{2}(:\d{2})?$/.test(initialTimeStr)
+    ? initialTimeStr.length === 5 ? `${initialTimeStr}:00` : initialTimeStr
+    : '00:00:00';
+  const utcIsoStr = initialDateStr ? `${initialDateStr}T${timePart}Z` : '';
+  const initialDateTimeValid =
+    utcIsoStr !== '' && utcIsoStr !== 'T00:00:00Z' &&
+    !Number.isNaN(new Date(utcIsoStr).getTime());
+  const epochTime = initialDateTimeValid
+    ? Cesium.JulianDate.fromDate(new Date(utcIsoStr))
     : fallbackTime ?? Cesium.JulianDate.now();
   return { elements, epochTime };
 }

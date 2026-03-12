@@ -75,22 +75,34 @@ export function renderOrbitForm(
   const koreaPassTime = computeTimeOverPosition(RADARSAT_RCM, refTime);
   const defaultInitialDate = Cesium.JulianDate.toDate(koreaPassTime);
 
-  // 초기 날짜 (UTC) - 선택한 날짜의 00:00 UTC부터 시작
-  const initialDateWrapper = document.createElement('div');
-  initialDateWrapper.lang = 'en-US';
-  initialDateWrapper.style.marginTop = '10px';
-  const initialDateLabel = document.createElement('label');
-  initialDateLabel.style.display = 'block';
-  initialDateLabel.textContent = 'Initial Date (UTC):';
+  // Initial Time (UTC) - 날짜 + 시간
+  const initialTimeWrapper = document.createElement('div');
+  initialTimeWrapper.lang = 'en-US';
+  initialTimeWrapper.style.marginTop = '10px';
+  const initialTimeLabel = document.createElement('label');
+  initialTimeLabel.style.display = 'block';
+  initialTimeLabel.textContent = 'Initial Time (UTC):';
+  const initialTimeRow = document.createElement('div');
+  initialTimeRow.style.display = 'flex';
+  initialTimeRow.style.gap = '8px';
+  initialTimeRow.style.marginTop = '4px';
   const initialDateInput = document.createElement('input');
   initialDateInput.type = 'date';
-  initialDateInput.id = ORBIT_FORM_IDS.INITIAL_TIME;
+  initialDateInput.id = ORBIT_FORM_IDS.INITIAL_DATE;
   const d = defaultInitialDate;
   initialDateInput.value =
     `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-  initialDateLabel.appendChild(initialDateInput);
-  initialDateWrapper.appendChild(initialDateLabel);
-  form.appendChild(initialDateWrapper);
+  const initialTimeInput = document.createElement('input');
+  initialTimeInput.type = 'time';
+  initialTimeInput.id = ORBIT_FORM_IDS.INITIAL_TIME;
+  initialTimeInput.step = '1';
+  initialTimeInput.value =
+    `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}:${String(d.getUTCSeconds()).padStart(2, '0')}`;
+  initialTimeRow.appendChild(initialDateInput);
+  initialTimeRow.appendChild(initialTimeInput);
+  initialTimeLabel.appendChild(initialTimeRow);
+  initialTimeWrapper.appendChild(initialTimeLabel);
+  form.appendChild(initialTimeWrapper);
 
   createInputField(
     form,
@@ -250,6 +262,7 @@ export function renderOrbitForm(
 
   // 궤도 입력 변경 시 즉시 적용 (debounced는 OrbitSettings에서 처리)
   const orbitInputIds = [
+    ORBIT_FORM_IDS.INITIAL_DATE,
     ORBIT_FORM_IDS.INITIAL_TIME,
     ORBIT_FORM_IDS.SEMI_MAJOR_AXIS,
     ORBIT_FORM_IDS.ECCENTRICITY,
