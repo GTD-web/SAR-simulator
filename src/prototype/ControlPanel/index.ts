@@ -117,7 +117,7 @@ export class ControlPanelManager {
     const targetRegionColumn = document.createElement('div');
     targetRegionColumn.id = 'targetGeoDataContent';
     targetRegionColumn.className = 'target-geo-data-content target-region-column';
-    targetRegionColumn.innerHTML = '<p class="target-geo-data-placeholder">타겟을 설정한 뒤 \'Fetch Region Info\'를 누르세요.</p>';
+    targetRegionColumn.innerHTML = '<p class="target-geo-data-placeholder">Set target first, then click \'Fetch Region Info\'.</p>';
 
     targetTabContent.appendChild(targetFormColumn);
     targetTabContent.appendChild(targetRegionColumn);

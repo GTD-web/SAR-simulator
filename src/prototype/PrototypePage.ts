@@ -58,10 +58,19 @@ export class PrototypePage {
         border-bottom: 1px solid #333;
       }
       .target-geo-data-table th { color: #aaa; font-weight: 500; }
-      .target-geo-data-grid-title {
+      .target-geo-data-section-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         margin: 16px 0 8px 0;
+      }
+      .target-geo-data-section-header:first-of-type { margin-top: 0; }
+      .target-geo-data-grid-title,
+      .target-geo-data-json-title {
+        margin: 0;
         font-size: 13px;
         color: #ccc;
+        flex: 1;
       }
       .target-geo-data-grid-scroll {
         max-height: 280px;
@@ -470,20 +479,20 @@ const terrain = {
     const { bounds, areaKm2, elevation, sampleCount, elevationGrid, rangeCount, azimuthCount } = regionInfo;
     let html = '';
     let summaryRows = `
-      <tr><th>경도 범위</th><td>${bounds.lonMin.toFixed(4)}° ~ ${bounds.lonMax.toFixed(4)}°</td></tr>
-      <tr><th>위도 범위</th><td>${bounds.latMin.toFixed(4)}° ~ ${bounds.latMax.toFixed(4)}°</td></tr>
-      <tr><th>면적</th><td>${areaKm2.toFixed(2)} km²</td></tr>
-      <tr><th>격자 크기</th><td>${rangeCount ?? '-'} × ${azimuthCount ?? '-'}</td></tr>
-      <tr><th>샘플 수</th><td>${sampleCount}</td></tr>
+      <tr><th>Longitude Range</th><td>${bounds.lonMin.toFixed(4)}° ~ ${bounds.lonMax.toFixed(4)}°</td></tr>
+      <tr><th>Latitude Range</th><td>${bounds.latMin.toFixed(4)}° ~ ${bounds.latMax.toFixed(4)}°</td></tr>
+      <tr><th>Area</th><td>${areaKm2.toFixed(2)} km²</td></tr>
+      <tr><th>Grid Size</th><td>${rangeCount ?? '-'} × ${azimuthCount ?? '-'}</td></tr>
+      <tr><th>Sample Count</th><td>${sampleCount}</td></tr>
     `;
     if (elevation) {
       summaryRows += `
-        <tr><th>고도 (최소)</th><td>${elevation.min.toFixed(1)} m</td></tr>
-        <tr><th>고도 (최대)</th><td>${elevation.max.toFixed(1)} m</td></tr>
-        <tr><th>고도 (평균)</th><td>${elevation.mean.toFixed(1)} m</td></tr>
+        <tr><th>Elevation (min)</th><td>${elevation.min.toFixed(1)} m</td></tr>
+        <tr><th>Elevation (max)</th><td>${elevation.max.toFixed(1)} m</td></tr>
+        <tr><th>Elevation (mean)</th><td>${elevation.mean.toFixed(1)} m</td></tr>
       `;
     } else {
-      summaryRows += '<tr><th>고도</th><td>고도 데이터를 사용할 수 없습니다</td></tr>';
+      summaryRows += '<tr><th>Elevation</th><td>Elevation data unavailable</td></tr>';
     }
     html += `<table class="target-geo-data-table"><tbody>${summaryRows}</tbody></table>`;
 
@@ -495,10 +504,10 @@ const terrain = {
         )
         .join('');
       html += `
-        <h5 class="target-geo-data-grid-title">DEM 격자 (SAR 지오코딩용)</h5>
+        <h5 class="target-geo-data-grid-title">DEM Grid (for SAR Geocoding)</h5>
         <div class="target-geo-data-grid-scroll">
           <table class="target-geo-data-table target-geo-data-grid-table">
-            <thead><tr><th>No.</th><th>경도 (°)</th><th>위도 (°)</th><th>고도 (m)</th></tr></thead>
+            <thead><tr><th>No.</th><th>Lon (°)</th><th>Lat (°)</th><th>Elev (m)</th></tr></thead>
             <tbody>${gridRows}</tbody>
           </table>
         </div>
@@ -510,12 +519,12 @@ const terrain = {
     try {
       jsonStr = JSON.stringify(payload, null, 2);
     } catch {
-      jsonStr = JSON.stringify({ error: 'JSON 직렬화 실패' });
+      jsonStr = JSON.stringify({ error: 'JSON serialization failed' });
     }
     html += `
-      <h5 class="target-geo-data-json-title">JSON 출력</h5>
+      <h5 class="target-geo-data-json-title">JSON Output</h5>
       <pre class="target-geo-data-json-pre" id="targetGeoDataJsonPre"></pre>
-      <button type="button" class="target-geo-data-json-dl sidebar-section button" id="targetGeoDataJsonDownload">JSON 다운로드</button>
+      <button type="button" class="target-geo-data-json-dl sidebar-section button" id="targetGeoDataJsonDownload">Download JSON</button>
     `;
     content.innerHTML = html;
 
@@ -538,7 +547,7 @@ const terrain = {
     try {
       jsonStr = JSON.stringify(payload, null, 2);
     } catch {
-      jsonStr = JSON.stringify({ error: 'JSON 직렬화 실패' });
+      jsonStr = JSON.stringify({ error: 'JSON serialization failed' });
     }
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);

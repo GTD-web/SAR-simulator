@@ -580,11 +580,14 @@ html, body, #cesiumContainer {
   transition: opacity 0.3s ease;
 }
 
-/* 스크롤바 스타일 - 어두운 테마 */
+/* 스크롤바 스타일 - Amethyst 테마 */
 #sidebarContent::-webkit-scrollbar,
 .tab-content::-webkit-scrollbar,
 .target-form-column::-webkit-scrollbar,
 .target-region-column::-webkit-scrollbar,
+.target-geo-data-content::-webkit-scrollbar,
+.target-geo-data-grid-scroll::-webkit-scrollbar,
+.target-geo-data-json-pre::-webkit-scrollbar,
 #signalResultsContent::-webkit-scrollbar,
 #swathGroupsContent::-webkit-scrollbar {
   width: 10px;
@@ -594,16 +597,36 @@ html, body, #cesiumContainer {
 .tab-content::-webkit-scrollbar-track,
 .target-form-column::-webkit-scrollbar-track,
 .target-region-column::-webkit-scrollbar-track,
+.target-geo-data-content::-webkit-scrollbar-track,
+.target-geo-data-grid-scroll::-webkit-scrollbar-track,
+.target-geo-data-json-pre::-webkit-scrollbar-track,
 #signalResultsContent::-webkit-scrollbar-track,
 #swathGroupsContent::-webkit-scrollbar-track {
   background: color-mix(in srgb, var(--dark-amethyst) 60%, transparent);
   border-radius: 5px;
 }
 
+/* 스크롤바 코너 (가로·세로 교차 영역) - 흰색 영역 제거 */
+#sidebarContent::-webkit-scrollbar-corner,
+.tab-content::-webkit-scrollbar-corner,
+.target-form-column::-webkit-scrollbar-corner,
+.target-region-column::-webkit-scrollbar-corner,
+.target-geo-data-content::-webkit-scrollbar-corner,
+.target-geo-data-grid-scroll::-webkit-scrollbar-corner,
+.target-geo-data-json-pre::-webkit-scrollbar-corner,
+#signalResultsContent::-webkit-scrollbar-corner,
+#swathGroupsContent::-webkit-scrollbar-corner {
+  background: color-mix(in srgb, var(--dark-amethyst) 60%, transparent);
+  border-radius: 0 0 5px 5px;
+}
+
 #sidebarContent::-webkit-scrollbar-thumb,
 .tab-content::-webkit-scrollbar-thumb,
 .target-form-column::-webkit-scrollbar-thumb,
 .target-region-column::-webkit-scrollbar-thumb,
+.target-geo-data-content::-webkit-scrollbar-thumb,
+.target-geo-data-grid-scroll::-webkit-scrollbar-thumb,
+.target-geo-data-json-pre::-webkit-scrollbar-thumb,
 #signalResultsContent::-webkit-scrollbar-thumb,
 #swathGroupsContent::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--lilac) 60%, transparent);
@@ -615,6 +638,9 @@ html, body, #cesiumContainer {
 .tab-content::-webkit-scrollbar-thumb:hover,
 .target-form-column::-webkit-scrollbar-thumb:hover,
 .target-region-column::-webkit-scrollbar-thumb:hover,
+.target-geo-data-content::-webkit-scrollbar-thumb:hover,
+.target-geo-data-grid-scroll::-webkit-scrollbar-thumb:hover,
+.target-geo-data-json-pre::-webkit-scrollbar-thumb:hover,
 #signalResultsContent::-webkit-scrollbar-thumb:hover,
 #swathGroupsContent::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--lilac) 85%, transparent);
@@ -625,6 +651,9 @@ html, body, #cesiumContainer {
 .tab-content::-webkit-scrollbar-thumb:active,
 .target-form-column::-webkit-scrollbar-thumb:active,
 .target-region-column::-webkit-scrollbar-thumb:active,
+.target-geo-data-content::-webkit-scrollbar-thumb:active,
+.target-geo-data-grid-scroll::-webkit-scrollbar-thumb:active,
+.target-geo-data-json-pre::-webkit-scrollbar-thumb:active,
 #signalResultsContent::-webkit-scrollbar-thumb:active,
 #swathGroupsContent::-webkit-scrollbar-thumb:active {
   background: var(--pink-orchid);
