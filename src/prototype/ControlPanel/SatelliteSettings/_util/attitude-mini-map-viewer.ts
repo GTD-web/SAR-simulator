@@ -40,6 +40,8 @@ export class AttitudeMiniMapViewer {
   private isCollapsed: boolean;
   private expandButton: HTMLElement | null;
   private expandButtonContainer: HTMLElement | null;
+  private attitudeOverlay: HTMLElement | null;
+  private attitudeValueEls: Record<string, HTMLElement>;
 
   constructor(
     mainViewer: any,
@@ -61,6 +63,8 @@ export class AttitudeMiniMapViewer {
     this.cameraWeights = { ...DEFAULT_CAMERA_WEIGHTS };
     this.isCollapsed = false;
     this.expandButton = null;
+    this.attitudeOverlay = null;
+    this.attitudeValueEls = {};
   }
 
   /**
@@ -93,6 +97,7 @@ export class AttitudeMiniMapViewer {
     this.createAxisEntities();
     this.createOrbitLine();
     this.createSwathLines();
+    this.createAttitudeOverlay();
     this.setupCameraUpdate();
     if (this.expandButtonContainer) {
       this.createToggleButton();
@@ -479,6 +484,80 @@ export class AttitudeMiniMapViewer {
     });
   }
 
+  /**
+   * 미니맵 하단에 자세값(Roll / Pitch / Yaw / Hdg) 오버레이 생성
+   */
+  private createAttitudeOverlay(): void {
+    if (!this.miniContainer) return;
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 6px 10px 8px;
+      background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%);
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      pointer-events: none;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: 36px 1fr 36px 1fr;
+      column-gap: 4px;
+      row-gap: 2px;
+      line-height: 1.5;
+    `;
+
+    const defs: Array<{ key: string; label: string }> = [
+      { key: 'roll',  label: 'Roll' },
+      { key: 'yaw',   label: 'Yaw' },
+      { key: 'pitch', label: 'Pitch' },
+      { key: 'hdg',   label: 'Hdg' },
+    ];
+
+    const valueEls: Record<string, HTMLElement> = {};
+
+    defs.forEach(({ key, label }) => {
+      const labelEl = document.createElement('span');
+      labelEl.textContent = `${label}:`;
+      labelEl.style.cssText = 'color: rgba(200,180,220,0.75); text-align: right;';
+
+      const valEl = document.createElement('span');
+      valEl.textContent = '—';
+      valEl.style.cssText = 'color: #e8d5f0; text-align: left; padding-left: 4px;';
+      valueEls[key] = valEl;
+
+      overlay.appendChild(labelEl);
+      overlay.appendChild(valEl);
+    });
+
+    this.miniContainer.appendChild(overlay);
+    this.attitudeOverlay = overlay;
+    this.attitudeValueEls = valueEls;
+  }
+
+  /**
+   * 매 프레임 자세값 오버레이를 최신 값으로 갱신한다.
+   */
+  private updateAttitudeOverlay(): void {
+    if (!this.attitudeValueEls || !this.busPayloadManager) return;
+
+    const fmt = (v: number) => `${v >= 0 ? ' ' : ''}${v.toFixed(1)}°`;
+
+    const orientation = (this.busPayloadManager as any).getBusOrientation?.();
+    if (orientation) {
+      if (this.attitudeValueEls['roll'])  this.attitudeValueEls['roll'].textContent  = fmt(orientation.rollAngle);
+      if (this.attitudeValueEls['pitch']) this.attitudeValueEls['pitch'].textContent = fmt(orientation.pitchAngle);
+      if (this.attitudeValueEls['yaw'])   this.attitudeValueEls['yaw'].textContent   = fmt(orientation.yawAngle);
+    }
+
+    const pos = (this.busPayloadManager as any).getPositionForSwath?.();
+    if (pos && this.attitudeValueEls['hdg']) {
+      this.attitudeValueEls['hdg'].textContent = fmt(pos.heading);
+    }
+  }
+
   private setupCameraUpdate(): void {
     if (!this.miniViewer || !this.mainViewer || !this.busPayloadManager) return;
 
@@ -498,6 +577,7 @@ export class AttitudeMiniMapViewer {
     }
     this.miniViewer.scene.requestRender();
     this.updateMiniCamera();
+    this.updateAttitudeOverlay();
   }
 
   private updateMiniCamera(): void {
@@ -627,6 +707,12 @@ export class AttitudeMiniMapViewer {
       this.orbitLineEntity = null;
       this.swathLineEntities = [];
     }
+
+    if (this.attitudeOverlay?.parentNode) {
+      this.attitudeOverlay.parentNode.removeChild(this.attitudeOverlay);
+    }
+    this.attitudeOverlay = null;
+    this.attitudeValueEls = {};
 
     if (this.miniContainer?.parentNode) {
       this.miniContainer.parentNode.removeChild(this.miniContainer);

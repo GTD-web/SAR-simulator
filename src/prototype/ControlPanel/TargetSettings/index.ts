@@ -90,6 +90,8 @@ export class TargetSettings {
   private spotlight_aoi_cartesian: any | null;
   /** Spotlight 미션 종료 시각 (JulianDate) — 이 시각에 클럭 정지 */
   private spotlight_mission_end_time: any | null;
+  /** Spotlight 진입 전 viewer.clock.startTime 원본 (복원용) */
+  private spotlight_original_start_time: any | null;
   /** Spotlight 미션 시뮬레이션 진행 중 여부 (true이면 orbit 세그먼트 고정) */
   private spotlight_is_active: boolean;
   /** Sliding/Stripmap 미션 진행 중 여부 (true이면 along-track 엔티티 고정) */
@@ -118,6 +120,7 @@ export class TargetSettings {
     this.spotlight_base_time = null;
     this.spotlight_aoi_cartesian = null;
     this.spotlight_mission_end_time = null;
+    this.spotlight_original_start_time = null;
     this.spotlight_is_active = false;
     this.mission_is_active = false;
     this.mission_start_time = null;
@@ -577,11 +580,10 @@ export class TargetSettings {
     if (this.current_sar_mode === 'spotlight') {
       const is_playing: boolean = !!this.viewer.clock.shouldAnimate;
 
-      // 클럭 재생 시작 시점: orbit 세그먼트를 현재 위치에서 즉시 한 번만 고정 그림
+      // 클럭 재생 시작 시점: orbit 세그먼트는 applySpotlightSquint에서 이미 그려진 상태.
+      // 플래그만 설정해 syncFromSwath의 재그리기를 차단한다.
       if (is_playing && !this.spotlight_is_active && this.spotlight_aoi_cartesian) {
         this.spotlight_is_active = true;
-        this.clearMissionOrbitEntity();
-        this.drawMissionOrbitSegment();
       }
 
       // 클럭 재생 중이고 AOI가 확정되어 있으면 매 프레임 자세 갱신
@@ -598,11 +600,17 @@ export class TargetSettings {
           (cur.secondsOfDay - end.secondsOfDay);
         if (elapsed >= 0) {
           this.viewer.clock.shouldAnimate = false;
+          // 수정된 startTime을 원본으로 복원
+          if (this.spotlight_original_start_time) {
+            this.viewer.clock.startTime = this.spotlight_original_start_time;
+            this.spotlight_original_start_time = null;
+          }
           this.spotlight_is_active = false;
           this.spotlight_aoi_cartesian = null;
           this.spotlight_mission_end_time = null;
           this.spotlight_base_time = null;
           this.bus_payload_manager?.setAntennaSquintAngle(0);
+          (this.bus_payload_manager as any)?.setSpotlightAoi?.(null);
           this.updateTargetDebounced();
         }
       }
@@ -945,11 +953,19 @@ export class TargetSettings {
       this.spotlight_base_time = Cesium.JulianDate.addSeconds(
         this.viewer.clock.currentTime, 0, new Cesium.JulianDate()
       );
+      // viewer.clock.startTime 원본 저장 (Spotlight 해제 시 복원)
+      this.spotlight_original_start_time = Cesium.JulianDate.addSeconds(
+        this.viewer.clock.startTime, 0, new Cesium.JulianDate()
+      );
 
       // squint=0인 상태에서 nominal Y축 ground point를 고정 AOI로 저장
       this.bus_payload_manager.setAntennaSquintAngle(0);
       const gp = this.bus_payload_manager.getYAxisGroundPoint?.();
-      if (gp) this.spotlight_aoi_cartesian = gp.cartesian;
+      if (gp) {
+        this.spotlight_aoi_cartesian = gp.cartesian;
+        // AOI 미니맵이 고정 타겟을 표시하도록 전달
+        (this.bus_payload_manager as any).setSpotlightAoi?.(gp.cartesian);
+      }
     }
 
     // 시작점: 현재 위치에서 squint 각도만큼 전방 시선이 닿는 위치에 위성이 있으려면
@@ -963,6 +979,16 @@ export class TargetSettings {
       delta_t,
       new Cesium.JulianDate()
     );
+
+    // LOOP_STOP 모드에서 currentTime < startTime이면 재생 시 startTime으로 강제 점프됨.
+    // new_time이 startTime보다 이전이면 startTime을 함께 앞당겨 클램핑을 방지한다.
+    const start = this.viewer.clock.startTime;
+    const new_before_start =
+      new_time.dayNumber < start.dayNumber ||
+      (new_time.dayNumber === start.dayNumber && new_time.secondsOfDay < start.secondsOfDay);
+    if (new_before_start) {
+      this.viewer.clock.startTime = Cesium.JulianDate.addSeconds(new_time, 0, new Cesium.JulianDate());
+    }
     this.viewer.clock.currentTime = new_time;
 
     // 미션 종료 시각: new_time + T  (T = 2 * alt * tan(squint) / v = 2 * |delta_t|)
@@ -973,19 +999,30 @@ export class TargetSettings {
 
     // 초기 squint 방향 적용 (시뮬레이션 중엔 updateSpotlightAttitude가 동적으로 갱신)
     this.bus_payload_manager.setAntennaSquintAngle(squint_deg);
+
+    // 미션 시작 위치에서 궤도 세그먼트 즉시 그리기 (throttle 대기 없이)
+    this.drawMissionOrbitSegment();
   }
 
   /**
    * Spotlight 모드 해제 시 위성 시각과 안테나 자세를 복원한다.
    */
   private resetSpotlight(): void {
-    if (this.spotlight_base_time && this.viewer?.clock) {
-      this.viewer.clock.currentTime = Cesium.JulianDate.addSeconds(
-        this.spotlight_base_time, 0, new Cesium.JulianDate()
-      );
-      this.spotlight_base_time = null;
+    if (this.viewer?.clock) {
+      // 수정된 startTime을 원본으로 먼저 복원
+      if (this.spotlight_original_start_time) {
+        this.viewer.clock.startTime = this.spotlight_original_start_time;
+        this.spotlight_original_start_time = null;
+      }
+      if (this.spotlight_base_time) {
+        this.viewer.clock.currentTime = Cesium.JulianDate.addSeconds(
+          this.spotlight_base_time, 0, new Cesium.JulianDate()
+        );
+        this.spotlight_base_time = null;
+      }
     }
     this.bus_payload_manager?.setAntennaSquintAngle(0);
+    (this.bus_payload_manager as any)?.setSpotlightAoi?.(null);
     this.spotlight_aoi_cartesian = null;
     this.spotlight_mission_end_time = null;
     this.spotlight_is_active = false;

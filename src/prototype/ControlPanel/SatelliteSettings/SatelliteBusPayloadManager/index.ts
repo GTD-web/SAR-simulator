@@ -50,6 +50,8 @@ export class SatelliteBusPayloadManager {
   private antennaGap: number; // 버스와 안테나 사이 간격 (미터)
   /** Spotlight squint 적용 전 busOrientation.yawAngle 원본값. null이면 squint 미적용 상태 */
   private base_bus_yaw: number | null;
+  /** Spotlight 미션의 고정 AOI Cartesian3 — AOI 미니맵 고정 표시용 */
+  private spotlight_aoi: any | null;
   private directionArrows: {
     positive: any;
     negative: any;
@@ -75,6 +77,7 @@ export class SatelliteBusPayloadManager {
     this.antennaParams = null;
     this.antennaGap = 0.1; // 기본값: 100mm (미터 단위)
     this.base_bus_yaw = null;
+    this.spotlight_aoi = null;
     this.directionArrows = null;
   }
 
@@ -729,6 +732,19 @@ export class SatelliteBusPayloadManager {
    */
   getBusOrientation(): { rollAngle: number; pitchAngle: number; yawAngle: number } | null {
     return this.busOrientation ?? null;
+  }
+
+  /**
+   * AOI 미니맵이 Spotlight 모드에서 고정 타겟을 표시하도록 Cartesian3를 설정한다.
+   * null을 전달하면 일반 모드(안테나 Y축 접촉점)로 복원된다.
+   */
+  setSpotlightAoi(cartesian: any | null): void {
+    this.spotlight_aoi = cartesian;
+  }
+
+  /** Spotlight 모드의 고정 AOI Cartesian3를 반환. null이면 Spotlight 모드 아님 */
+  getSpotlightAoi(): any | null {
+    return this.spotlight_aoi;
   }
 
   /**

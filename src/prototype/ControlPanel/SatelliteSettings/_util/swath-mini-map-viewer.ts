@@ -17,6 +17,7 @@ export class SwathMiniMapViewer {
   private miniContainer: HTMLElement | null;
   private miniViewer: any;
   private swathEntity: any;
+  private aoiTargetEntity: any;
   private postRenderRemove: (() => void) | null;
   private isCollapsed: boolean;
   private expandButton: HTMLElement | null;
@@ -32,6 +33,7 @@ export class SwathMiniMapViewer {
     this.miniContainer = null;
     this.miniViewer = null;
     this.swathEntity = null;
+    this.aoiTargetEntity = null;
     this.postRenderRemove = null;
     this.isCollapsed = false;
     this.expandButton = null;
@@ -46,10 +48,39 @@ export class SwathMiniMapViewer {
     this.createMiniMapContainer();
     this.createMiniViewer();
     this.createSwathEntity();
+    this.createAoiTargetEntity();
     this.setupCameraUpdate();
     if (this.expandButtonContainer) {
       this.createToggleButton();
     }
+  }
+
+  /**
+   * 미니맵 중심 좌표와 heading을 반환한다.
+   * Spotlight 모드(getSpotlightAoi가 non-null)이면 고정 AOI Cartesian3를 lat/lon으로 변환해 사용하고,
+   * 일반 모드이면 안테나 Y축 지표면 접촉점을 사용한다.
+   */
+  private getSwathCenter(): { latitude: number; longitude: number; heading: number } | null {
+    const pos = this.busPayloadManager?.getPositionForSwath?.();
+    if (!pos) return null;
+
+    const spotlightAoi = (this.busPayloadManager as any)?.getSpotlightAoi?.();
+    if (spotlightAoi) {
+      try {
+        const carto = Cesium.Cartographic.fromCartesian(spotlightAoi);
+        return {
+          latitude: Cesium.Math.toDegrees(carto.latitude),
+          longitude: Cesium.Math.toDegrees(carto.longitude),
+          heading: pos.heading,
+        };
+      } catch {
+        // 변환 실패 시 일반 경로로 fallback
+      }
+    }
+
+    const groundPoint = this.busPayloadManager?.getYAxisGroundPoint?.();
+    if (!groundPoint) return null;
+    return { latitude: groundPoint.latitude, longitude: groundPoint.longitude, heading: pos.heading };
   }
 
   private createMiniMapContainer(): void {
@@ -228,22 +259,22 @@ export class SwathMiniMapViewer {
     this.swathEntity = this.miniViewer.entities.add({
       name: 'SwathMiniMapView',
       show: new Cesium.CallbackProperty(
-        () => !!this.busPayloadManager?.getPositionForSwath?.() && !!this.busPayloadManager?.getYAxisGroundPoint?.(),
+        () => !!this.getSwathCenter(),
         false
       ),
       polygon: {
         hierarchy: new Cesium.CallbackProperty(() => {
-          const groundPoint = this.busPayloadManager?.getYAxisGroundPoint?.();
+          const center = this.getSwathCenter();
           const pos = this.busPayloadManager?.getPositionForSwath?.();
-          if (!groundPoint || !pos) {
+          if (!center || !pos) {
             return new Cesium.PolygonHierarchy(defaultPositions);
           }
 
           const halfSpacing = SWATH_SPACING_M / 2;
           const geometry = {
-            centerLat: groundPoint.latitude,
-            centerLon: groundPoint.longitude,
-            heading: pos.heading,
+            centerLat: center.latitude,
+            centerLon: center.longitude,
+            heading: center.heading,
             nearRange: -halfSpacing,
             farRange: halfSpacing,
             swathWidth: SWATH_SPACING_M,
@@ -271,6 +302,32 @@ export class SwathMiniMapViewer {
     });
   }
 
+  /**
+   * Spotlight 모드에서만 표시되는 AOI 타겟 마커 (빨간 점 + 흰 테두리)
+   */
+  private createAoiTargetEntity(): void {
+    if (!this.miniViewer || !this.busPayloadManager) return;
+
+    this.aoiTargetEntity = this.miniViewer.entities.add({
+      name: 'SwathMiniMapAoiTarget',
+      show: new Cesium.CallbackProperty(
+        () => !!(this.busPayloadManager as any)?.getSpotlightAoi?.(),
+        false
+      ),
+      position: new Cesium.CallbackProperty(() => {
+        const aoi = (this.busPayloadManager as any)?.getSpotlightAoi?.();
+        return aoi ?? Cesium.Cartesian3.fromDegrees(0, 0, 0);
+      }, false),
+      point: {
+        pixelSize: 10,
+        color: Cesium.Color.RED.withAlpha(0.9),
+        outlineColor: Cesium.Color.WHITE.withAlpha(0.9),
+        outlineWidth: 2,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+      },
+    });
+  }
+
   private setupCameraUpdate(): void {
     if (!this.miniViewer || !this.mainViewer || !this.busPayloadManager) return;
 
@@ -285,15 +342,15 @@ export class SwathMiniMapViewer {
   private updateMiniCamera(): void {
     if (!this.miniViewer || !this.busPayloadManager) return;
 
-    const groundPoint = this.busPayloadManager.getYAxisGroundPoint?.();
+    const center = this.getSwathCenter();
     const pos = this.busPayloadManager.getPositionForSwath?.();
-    if (!groundPoint || !pos) return;
+    if (!center || !pos) return;
 
     const halfSpacing = SWATH_SPACING_M / 2;
     const geometry = {
-      centerLat: groundPoint.latitude,
-      centerLon: groundPoint.longitude,
-      heading: pos.heading,
+      centerLat: center.latitude,
+      centerLon: center.longitude,
+      heading: center.heading,
       nearRange: -halfSpacing,
       farRange: halfSpacing,
       swathWidth: SWATH_SPACING_M,
@@ -357,12 +414,16 @@ export class SwathMiniMapViewer {
         if (this.swathEntity) {
           this.miniViewer.entities.remove(this.swathEntity);
         }
+        if (this.aoiTargetEntity) {
+          this.miniViewer.entities.remove(this.aoiTargetEntity);
+        }
         this.miniViewer.destroy();
       } catch {
         // 무시
       }
       this.miniViewer = null;
       this.swathEntity = null;
+      this.aoiTargetEntity = null;
     }
 
     if (this.miniContainer?.parentNode) {
