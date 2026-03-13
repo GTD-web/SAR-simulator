@@ -22,6 +22,10 @@ function copyAssets() {
 }
 
 try {
+  const distDir = path.dirname(destCssFile);
+  if (!fs.existsSync(distDir)) {
+    fs.mkdirSync(distDir, { recursive: true });
+  }
   fs.copyFileSync(srcCssFile, destCssFile);
   console.log('✓ CSS 파일 복사 완료: src/styles.css -> dist/styles.css');
   
