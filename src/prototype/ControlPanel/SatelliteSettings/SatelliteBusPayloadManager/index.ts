@@ -746,6 +746,15 @@ export class SatelliteBusPayloadManager {
   }
 
   /**
+   * squint 각도 계산용 위성 기본 축 반환 (BUS roll/pitch/yaw 및 squint 적용 전 순수 궤도 프레임).
+   * xAxis = 진행방향(along-track), yAxis = cross-track, zAxis = nadir
+   */
+  getBaseAxesForSquint(): { xAxis: any; yAxis: any; zAxis: any } | null {
+    if (!this.currentCartesian) return null;
+    return calculateBaseAxes(this.currentCartesian, this.getVelocityOptions());
+  }
+
+  /**
    * BUS Y축 방향 (정규화된 ECEF 단위 벡터) 반환. 안테나 축이 BUS와 동일하므로 Y축 지표면 직선 등에 사용.
    * initialAzimuthAngle(스쿼인트)이 설정된 경우 BUS Z축(나디르) 기준으로 추가 회전을 적용한다.
    */
