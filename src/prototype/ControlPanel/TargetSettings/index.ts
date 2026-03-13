@@ -6,6 +6,7 @@ import {
 import {
   computeGridCornersLonLat,
   computeAllGridPointsLonLat,
+  offsetKmToLonLat,
 } from './_util/sar-grid-to-cesium.js';
 import { fetchBuildingsFromOverpass } from './_util/overpass-buildings.js';
 import { addTerrainElevationToBuildings } from './_util/sar-region-payload.js';
@@ -660,22 +661,11 @@ export class TargetSettings {
     if (!this.viewer) return;
     this.clearTargetEntities();
 
-    // bus_payload_manager가 있으면 DOM 필드 대신 직접 위성 swath 위치를 읽어 타이밍 문제 방지
-    let center_lon: number;
-    let center_lat: number;
-    let heading_deg: number;
-
+    // bus_payload_manager가 있으면 현재 위성 위치 확보 여부 검사 (확보 안 되면 미표시)
     if (this.bus_payload_manager) {
       const ground_point = this.bus_payload_manager.getYAxisGroundPoint?.();
       const pos = this.bus_payload_manager.getPositionForSwath?.();
-      if (!ground_point || !pos) return; // 위성 위치 미확보 시 미표시
-      center_lon = ground_point.longitude;
-      center_lat = ground_point.latitude;
-      heading_deg = pos.heading;
-    } else {
-      center_lon = parseFloat((document.getElementById('prototypeTargetLongitude') as HTMLInputElement)?.value || '127');
-      center_lat = parseFloat((document.getElementById('prototypeTargetLatitude') as HTMLInputElement)?.value || '37.5');
-      heading_deg = parseFloat((document.getElementById('prototypeTargetAlongTrackHeading') as HTMLInputElement)?.value || '90');
+      if (!ground_point || !pos) return;
     }
 
     const range_count = parseInt((document.getElementById('prototypeTargetRangeCount') as HTMLInputElement)?.value || '8', 10);
@@ -699,26 +689,38 @@ export class TargetSettings {
       10
     );
 
-    // swath 내 격자점만 표시 (별도 폴리곤/방향선 없음)
-    const grid_points = computeAllGridPointsLonLat(
-      center_lon,
-      center_lat,
-      heading_deg,
-      range_params,
-      azimuth_params
-    );
-    for (const p of grid_points) {
-      const entity = this.viewer.entities.add({
-        position: Cesium.Cartesian3.fromDegrees(p.longitude_deg, p.latitude_deg, 0),
-        point: {
-          pixelSize: point_size,
-          color: Cesium.Color.CYAN,
-          outlineColor: Cesium.Color.WHITE,
-          outlineWidth: 1,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-        },
-      });
-      this.grid_point_entities.push(entity);
+    // swath 내 격자점: CallbackProperty를 사용해 Swath 폴리곤과 동기화
+    // (위성이 이동해도 매 프레임 현재 위치 기반으로 자동 업데이트)
+    for (let az_i = 0; az_i < azimuth_params.count; az_i++) {
+      for (let rng_i = 0; rng_i < range_params.count; rng_i++) {
+        const along_km = azimuth_params.offset_km + az_i * azimuth_params.spacing_km;
+        const cross_km = range_params.offset_km + rng_i * range_params.spacing_km;
+
+        const entity = this.viewer.entities.add({
+          position: new Cesium.CallbackProperty(() => {
+            let lon: number, lat: number, hdg: number;
+            const gp = this.bus_payload_manager?.getYAxisGroundPoint?.();
+            const ps = this.bus_payload_manager?.getPositionForSwath?.();
+            if (gp && ps) {
+              lon = gp.longitude; lat = gp.latitude; hdg = ps.heading;
+            } else {
+              lon = parseFloat((document.getElementById('prototypeTargetLongitude') as HTMLInputElement)?.value || '127');
+              lat = parseFloat((document.getElementById('prototypeTargetLatitude') as HTMLInputElement)?.value || '37.5');
+              hdg = parseFloat((document.getElementById('prototypeTargetAlongTrackHeading') as HTMLInputElement)?.value || '90');
+            }
+            const pt = offsetKmToLonLat(lon, lat, hdg, along_km, cross_km);
+            return Cesium.Cartesian3.fromDegrees(pt.longitude_deg, pt.latitude_deg, 0);
+          }, false) as any,
+          point: {
+            pixelSize: point_size,
+            color: Cesium.Color.CYAN,
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 1,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          },
+        });
+        this.grid_point_entities.push(entity);
+      }
     }
 
     // 미션 진행 중이면 along-track/orbit 엔티티를 재그리지 않고 고정 유지

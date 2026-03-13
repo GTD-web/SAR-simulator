@@ -132,7 +132,7 @@ export function alongCrossKmToLonLat(
   );
 }
 
-function offsetKmToLonLat(
+export function offsetKmToLonLat(
   center_lon_deg: number,
   center_lat_deg: number,
   heading_deg: number,
