@@ -481,8 +481,7 @@ export class OrbitSettings {
   }
 
   /**
-   * Fly to Satellite 버튼: 위성 바로 위에서 수직 하향(-90°) 뷰로 카메라 이동 후 추적
-   * viewer.zoomTo 대신 camera.flyTo 직접 사용 → bounding sphere 계산 불필요
+   * Fly to Satellite 버튼: constants의 FLY_TO_SATELLITE_PITCH_DEGREES(45° 등각) 뷰로 카메라 이동 후 추적
    */
   zoomToSatelliteAndTrack(): void {
     const busEntity = this.busPayloadManager?.getBusEntity();
@@ -502,32 +501,13 @@ export class OrbitSettings {
       this.viewer.camera.cancelFlight();
     }
 
-    const range = CAMERA.FLY_TO_SATELLITE_RANGE;
-    // 지구 반경 방향(위쪽) 단위벡터
-    const radialUp = Cesium.Cartesian3.normalize(entityPos, new Cesium.Cartesian3());
-    // 카메라 위치: entity 바로 위
-    const camPos = Cesium.Cartesian3.add(
+    setCameraAtPosition(
+      this.viewer.camera,
       entityPos,
-      Cesium.Cartesian3.multiplyByScalar(radialUp, range, new Cesium.Cartesian3()),
-      new Cesium.Cartesian3()
+      CAMERA.HEADING_DEGREES,
+      CAMERA.FLY_TO_SATELLITE_PITCH_DEGREES,
+      CAMERA.FLY_TO_SATELLITE_RANGE
     );
-    // 카메라 direction: 아래를 향함(-radialUp)
-    const direction = Cesium.Cartesian3.negate(radialUp, new Cesium.Cartesian3());
-    // 카메라 up: North 방향 (Z축과 radialUp의 cross product로 East를 구한 뒤 North 계산)
-    const zAxis = new Cesium.Cartesian3(0, 0, 1);
-    let east = Cesium.Cartesian3.cross(zAxis, radialUp, new Cesium.Cartesian3());
-    if (Cesium.Cartesian3.magnitude(east) < 1e-6) {
-      // 극지방 예외: X축 사용
-      east = new Cesium.Cartesian3(1, 0, 0);
-    }
-    Cesium.Cartesian3.normalize(east, east);
-    const northWC = Cesium.Cartesian3.cross(radialUp, east, new Cesium.Cartesian3());
-    Cesium.Cartesian3.normalize(northWC, northWC);
-
-    this.viewer.camera.setView({
-      destination: camPos,
-      orientation: { direction, up: northWC },
-    });
 
     // 추적 설정 (_trackingTarget은 ViewerInitializer preRender에서 처리)
     this.viewer._trackingTarget = busEntity;
@@ -538,6 +518,13 @@ export class OrbitSettings {
   /** 시뮬레이션(clock 재생)이 실행 중인지 */
   isSimulationRunning(): boolean {
     return !!(this.viewer?.clock?.shouldAnimate);
+  }
+
+  /**
+   * 현재 캐시된 Satrec 반환. TargetSettings에서 궤도 미션 구간 표시에 사용.
+   */
+  getCachedSatrec(): Satrec | null {
+    return this.cachedSatrec;
   }
 
   /**

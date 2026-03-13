@@ -11,6 +11,7 @@ import { fetchBuildingsFromOverpass } from './_util/overpass-buildings.js';
 import { addTerrainElevationToBuildings } from './_util/sar-region-payload.js';
 import { restoreZoomDistance } from '../SatelliteSettings/_util/camera-manager.js';
 import type { SatelliteBusPayloadManager } from '../SatelliteSettings/SatelliteBusPayloadManager/index.js';
+import { getPositionFromSatrec, type Satrec } from '../OrbitSettings/_util/tle-position-util.js';
 
 /** swath 크기 (km) — prototype-swath-preview.ts의 SWATH_SPACING_M = 5000과 동일 */
 const SWATH_KM = 5.0;
@@ -62,6 +63,8 @@ export interface TargetSettingsOptions {
   onRegionInfoFetched?: (data: RegionInfo) => void;
   /** 위성 swath 연동용 busPayloadManager */
   busPayloadManager?: SatelliteBusPayloadManager | null;
+  /** 궤도 미션 구간 표시용 — OrbitSettings.getCachedSatrec() 콜백 */
+  getCachedSatrec?: () => Satrec | null;
 }
 
 /**
@@ -78,7 +81,9 @@ export class TargetSettings {
   private post_render_remove: (() => void) | null;
   private sync_throttle_last_ms: number;
   private along_track_entity: any | null;
+  private mission_orbit_entity: any | null;
   private current_sar_mode: SarMode;
+  private get_cached_satrec: (() => Satrec | null) | null;
 
   constructor() {
     this.container = null;
@@ -91,7 +96,9 @@ export class TargetSettings {
     this.post_render_remove = null;
     this.sync_throttle_last_ms = 0;
     this.along_track_entity = null;
+    this.mission_orbit_entity = null;
     this.current_sar_mode = 'spotlight';
+    this.get_cached_satrec = null;
   }
 
   /**
@@ -102,6 +109,7 @@ export class TargetSettings {
     this.viewer = viewer || null;
     this.on_region_info_fetched = options?.onRegionInfoFetched ?? null;
     this.bus_payload_manager = options?.busPayloadManager ?? null;
+    this.get_cached_satrec = options?.getCachedSatrec ?? null;
 
     const saved_mode = localStorage.getItem('prototype_sar_mode') as SarMode | null;
     if (saved_mode === 'sliding_spotlight' || saved_mode === 'stripmap') {
@@ -585,6 +593,9 @@ export class TargetSettings {
 
     // Sliding Spotlight / Stripmap 모드에서 Along Track 미션 영역 표시
     this.drawAlongTrackEntity();
+
+    // 궤도 위에 미션 구간 폴리라인 표시
+    this.drawMissionOrbitSegment();
   }
 
   private clearTargetEntities(): void {
@@ -649,6 +660,76 @@ export class TargetSettings {
     if (this.viewer && this.along_track_entity) {
       this.viewer.entities.remove(this.along_track_entity);
       this.along_track_entity = null;
+    }
+    this.clearMissionOrbitEntity();
+  }
+
+  /**
+   * 궤도 위에 미션 구간 폴리라인을 표시
+   * - Spotlight: squint 각도 기준 총 T초 구간 (현재 시각 ±T/2)
+   * - Sliding Spotlight / Stripmap: along_km 기준 구간
+   */
+  private drawMissionOrbitSegment(): void {
+    this.clearMissionOrbitEntity();
+    const satrec = this.get_cached_satrec?.();
+    if (!satrec || !this.viewer?.clock || !this.bus_payload_manager) return;
+
+    const pos = this.bus_payload_manager.getPositionForSwath?.();
+    if (!pos) return;
+
+    const alt_km = pos.altitude / 1000;
+    const v = Math.sqrt(GM_EARTH_KM3_S2 / (R_EARTH_KM + alt_km)); // km/s
+
+    let t_start_sec: number;
+    let t_end_sec: number;
+
+    if (this.current_sar_mode === 'spotlight') {
+      const squint_el = document.getElementById('prototypeTargetSquintAngle') as HTMLInputElement | null;
+      const squint_deg = parseFloat(squint_el?.value || '20');
+      const T = (2 * alt_km * Math.tan((squint_deg * Math.PI) / 180)) / v;
+      t_start_sec = -T / 2;
+      t_end_sec = T / 2;
+    } else {
+      const along_el = document.getElementById('prototypeTargetAlongTrackLength') as HTMLInputElement | null;
+      const along_km = parseFloat(along_el?.value || '20');
+      // along-track 박스: az_min=-SWATH_KM/2, az_max=-SWATH_KM/2+along_km
+      t_start_sec = -(SWATH_KM / 2) / v;
+      t_end_sec = (along_km - SWATH_KM / 2) / v;
+    }
+
+    const current_time = this.viewer.clock.currentTime;
+    const SAMPLES = 12;
+    const duration_sec = t_end_sec - t_start_sec;
+    const positions: any[] = [];
+
+    for (let i = 0; i <= SAMPLES; i++) {
+      const offset_sec = t_start_sec + (duration_sec * i) / SAMPLES;
+      const sample_time = Cesium.JulianDate.addSeconds(current_time, offset_sec, new Cesium.JulianDate());
+      const result = getPositionFromSatrec(satrec, sample_time);
+      if (result) {
+        positions.push(
+          Cesium.Cartesian3.fromDegrees(result.longitude, result.latitude, result.altitude)
+        );
+      }
+    }
+
+    if (positions.length < 2) return;
+
+    this.mission_orbit_entity = this.viewer.entities.add({
+      polyline: {
+        positions,
+        width: 4,
+        material: Cesium.Color.YELLOW.withAlpha(0.9),
+        clampToGround: false,
+        arcType: Cesium.ArcType.NONE,
+      },
+    });
+  }
+
+  private clearMissionOrbitEntity(): void {
+    if (this.viewer && this.mission_orbit_entity) {
+      this.viewer.entities.remove(this.mission_orbit_entity);
+      this.mission_orbit_entity = null;
     }
   }
 
@@ -904,6 +985,7 @@ export class TargetSettings {
       this.post_render_remove();
       this.post_render_remove = null;
     }
+    this.clearMissionOrbitEntity();
     this.clearAlongTrackEntity();
     this.clearTargetEntities();
     this.fetch_region_info_button = null;

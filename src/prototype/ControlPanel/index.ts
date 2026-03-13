@@ -140,6 +140,7 @@ export class ControlPanelManager {
     const targetOptions: TargetSettingsOptions = {
       onRegionInfoFetched: options?.onRegionInfoFetched ?? undefined,
       busPayloadManager: this.satelliteSettings.getBusPayloadManager(),
+      getCachedSatrec: () => this.orbitSettings?.getCachedSatrec() ?? null,
     };
     this.targetSettings = new TargetSettings();
     this.targetSettings.initialize(targetFormColumn, viewer, targetOptions);
