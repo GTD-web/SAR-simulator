@@ -86,6 +86,14 @@ export class TargetSettings {
   private get_cached_satrec: (() => Satrec | null) | null;
   /** Spotlight 모드 진입 시 저장해 두는 원본 시각 (리셋용) */
   private spotlight_base_time: any | null;
+  /** Sliding/Stripmap 미션 진행 중 여부 (true이면 along-track 엔티티 고정) */
+  private mission_is_active: boolean;
+  /** 미션 시작 시각 (JulianDate) */
+  private mission_start_time: any | null;
+  /** 미션 종료 시각 (JulianDate) — 이 시각에 클럭 정지 */
+  private mission_end_time: any | null;
+  /** syncFromSwath 직전 프레임의 clock.shouldAnimate 상태 */
+  private clock_anim_was_playing: boolean;
 
   constructor() {
     this.container = null;
@@ -102,6 +110,10 @@ export class TargetSettings {
     this.current_sar_mode = 'spotlight';
     this.get_cached_satrec = null;
     this.spotlight_base_time = null;
+    this.mission_is_active = false;
+    this.mission_start_time = null;
+    this.mission_end_time = null;
+    this.clock_anim_was_playing = false;
   }
 
   /**
@@ -185,6 +197,11 @@ export class TargetSettings {
         });
         spotlight_params.style.display = mode === 'spotlight' ? 'block' : 'none';
         non_spotlight_params.style.display = mode !== 'spotlight' ? 'block' : 'none';
+        // Sliding/Stripmap 모드에서 이탈 시 미션 고정 해제
+        if (prev_mode !== 'spotlight' && this.mission_is_active) {
+          this.unfreezeMission();
+          this.clearAlongTrackEntity();
+        }
         // Spotlight 이탈 시 위성 상태 복원
         if (prev_mode === 'spotlight' && mode !== 'spotlight') {
           this.resetSpotlight();
@@ -505,6 +522,34 @@ export class TargetSettings {
       this.updateSpacings(); // spacing/offset 표시 갱신 + summary + debounced draw
       this.updateMissionTime();
     }
+
+    // Sliding/Stripmap 미션 시작 감지 및 종료 체크
+    if (this.current_sar_mode !== 'spotlight' && this.viewer?.clock) {
+      const is_playing: boolean = !!this.viewer.clock.shouldAnimate;
+
+      // 클럭이 정지 → 재생으로 전환됐고 미션이 아직 활성화되지 않은 경우 → 미션 시작
+      if (is_playing && !this.clock_anim_was_playing && !this.mission_is_active) {
+        this.freezeMission();
+      }
+
+      // 미션 진행 중: 종료 시각 초과 시 클럭 정지 및 상태 해제
+      if (this.mission_is_active && this.mission_end_time) {
+        const cur = this.viewer.clock.currentTime;
+        const end = this.mission_end_time;
+        const elapsed =
+          (cur.dayNumber - end.dayNumber) * 86400 +
+          (cur.secondsOfDay - end.secondsOfDay);
+        if (elapsed >= 0) {
+          this.viewer.clock.shouldAnimate = false;
+          this.unfreezeMission();
+          // 미션 종료 후 along-track 엔티티를 현재 위성 위치로 재표시
+          this.clearAlongTrackEntity();
+          this.updateTargetDebounced();
+        }
+      }
+
+      this.clock_anim_was_playing = is_playing;
+    }
   }
 
   private updateSummary(): void {
@@ -611,11 +656,13 @@ export class TargetSettings {
       this.grid_point_entities.push(entity);
     }
 
-    // Sliding Spotlight / Stripmap 모드에서 Along Track 미션 영역 표시
-    this.drawAlongTrackEntity();
-
-    // 궤도 위에 미션 구간 폴리라인 표시
-    this.drawMissionOrbitSegment();
+    // 미션 진행 중이면 along-track/orbit 엔티티를 재그리지 않고 고정 유지
+    if (!this.mission_is_active) {
+      // Sliding Spotlight / Stripmap 모드에서 Along Track 미션 영역 표시
+      this.drawAlongTrackEntity();
+      // 궤도 위에 미션 구간 폴리라인 표시
+      this.drawMissionOrbitSegment();
+    }
   }
 
   private clearTargetEntities(): void {
@@ -625,7 +672,10 @@ export class TargetSettings {
       }
       this.grid_point_entities.length = 0;
     }
-    this.clearAlongTrackEntity();
+    // 미션 진행 중에는 along-track/orbit 엔티티를 고정 유지
+    if (!this.mission_is_active) {
+      this.clearAlongTrackEntity();
+    }
   }
 
   /**
@@ -713,9 +763,9 @@ export class TargetSettings {
     } else {
       const along_el = document.getElementById('prototypeTargetAlongTrackLength') as HTMLInputElement | null;
       const along_km = parseFloat(along_el?.value || '20');
-      // along-track 박스: az_min=-SWATH_KM/2, az_max=-SWATH_KM/2+along_km
-      t_start_sec = -(SWATH_KM / 2) / v;
-      t_end_sec = (along_km - SWATH_KM / 2) / v;
+      // 현재 위성 위치에서 시작해 along_km 만큼 이동하는 구간
+      t_start_sec = 0;
+      t_end_sec = along_km / v;
     }
 
     const current_time = this.viewer.clock.currentTime;
@@ -752,6 +802,43 @@ export class TargetSettings {
       this.viewer.entities.remove(this.mission_orbit_entity);
       this.mission_orbit_entity = null;
     }
+  }
+
+  /**
+   * Sliding/Stripmap 미션 영역을 현재 위치에 고정하고 미션 타이머를 시작한다.
+   * 이후 위성이 along_km 거리를 이동하면 클럭이 자동 정지된다.
+   */
+  private freezeMission(): void {
+    if (!this.viewer?.clock || !this.bus_payload_manager) return;
+    const v = this.getSatelliteGroundSpeedKmS();
+    if (!v) return;
+
+    const along_el = document.getElementById('prototypeTargetAlongTrackLength') as HTMLInputElement | null;
+    const along_km = parseFloat(along_el?.value || '20');
+    const mission_duration_sec = along_km / v;
+
+    this.mission_start_time = Cesium.JulianDate.addSeconds(
+      this.viewer.clock.currentTime, 0, new Cesium.JulianDate()
+    );
+    this.mission_end_time = Cesium.JulianDate.addSeconds(
+      this.mission_start_time, mission_duration_sec, new Cesium.JulianDate()
+    );
+    this.mission_is_active = true;
+
+    // 현재 위치에 along-track 엔티티와 orbit 세그먼트를 즉시 그리고 고정
+    this.clearAlongTrackEntity();
+    this.drawAlongTrackEntity();
+    this.drawMissionOrbitSegment();
+  }
+
+  /**
+   * 미션 고정 상태를 해제한다. 이후 다시 위성 위치를 따라 along-track 엔티티가 이동한다.
+   */
+  private unfreezeMission(): void {
+    this.mission_is_active = false;
+    this.mission_start_time = null;
+    this.mission_end_time = null;
+    this.clock_anim_was_playing = false;
   }
 
   /**
@@ -1061,6 +1148,7 @@ export class TargetSettings {
       this.post_render_remove();
       this.post_render_remove = null;
     }
+    this.unfreezeMission();
     this.resetSpotlight();
     this.clearMissionOrbitEntity();
     this.clearAlongTrackEntity();
