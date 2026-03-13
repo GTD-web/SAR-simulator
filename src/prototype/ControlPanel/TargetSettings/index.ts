@@ -16,6 +16,12 @@ import type { SatelliteBusPayloadManager } from '../SatelliteSettings/SatelliteB
 const SWATH_KM = 5.0;
 /** postRender sync 최소 간격 (ms) */
 const SYNC_THROTTLE_MS = 500;
+/** 지구 중력상수 (km³/s²) */
+const GM_EARTH_KM3_S2 = 3.986004418e5;
+/** 지구 평균 반경 (km) */
+const R_EARTH_KM = 6371.0;
+
+type SarMode = 'spotlight' | 'sliding_spotlight' | 'stripmap';
 
 /** DEM 격자 한 점 (SAR 지오코딩용) */
 export interface ElevationGridPoint {
@@ -71,6 +77,8 @@ export class TargetSettings {
   private bus_payload_manager: SatelliteBusPayloadManager | null;
   private post_render_remove: (() => void) | null;
   private sync_throttle_last_ms: number;
+  private along_track_entity: any | null;
+  private current_sar_mode: SarMode;
 
   constructor() {
     this.container = null;
@@ -82,6 +90,8 @@ export class TargetSettings {
     this.bus_payload_manager = null;
     this.post_render_remove = null;
     this.sync_throttle_last_ms = 0;
+    this.along_track_entity = null;
+    this.current_sar_mode = 'spotlight';
   }
 
   /**
@@ -92,10 +102,19 @@ export class TargetSettings {
     this.viewer = viewer || null;
     this.on_region_info_fetched = options?.onRegionInfoFetched ?? null;
     this.bus_payload_manager = options?.busPayloadManager ?? null;
+
+    const saved_mode = localStorage.getItem('prototype_sar_mode') as SarMode | null;
+    if (saved_mode === 'sliding_spotlight' || saved_mode === 'stripmap') {
+      this.current_sar_mode = saved_mode;
+    } else {
+      this.current_sar_mode = 'spotlight';
+    }
+
     this.render();
     if (this.viewer) {
       this.setupSwathSync();
       this.updateSpacings();
+      this.updateMissionTime();
       this.updateTargetDebounced();
     }
   }
@@ -130,6 +149,53 @@ export class TargetSettings {
     sar_title.style.color = '#ccc';
     sar_section.appendChild(sar_title);
     form.appendChild(sar_section);
+
+    // 모드 선택 버튼 그룹
+    const mode_selector = document.createElement('div');
+    mode_selector.className = 'sar-mode-selector';
+    const mode_defs: { id: string; label: string; mode: SarMode }[] = [
+      { id: 'sarModeSpotlight', label: 'Spotlight', mode: 'spotlight' },
+      { id: 'sarModeSlidingSpotlight', label: 'Sliding Spotlight', mode: 'sliding_spotlight' },
+      { id: 'sarModeStripmap', label: 'Stripmap', mode: 'stripmap' },
+    ];
+    const mode_buttons: HTMLButtonElement[] = [];
+    mode_defs.forEach(({ id, label, mode }) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = id;
+      btn.textContent = label;
+      btn.className = 'sar-mode-btn' + (this.current_sar_mode === mode ? ' active' : '');
+      btn.addEventListener('click', () => {
+        this.current_sar_mode = mode;
+        localStorage.setItem('prototype_sar_mode', mode);
+        mode_buttons.forEach((b, i) => {
+          b.classList.toggle('active', mode_defs[i].mode === mode);
+        });
+        spotlight_params.style.display = mode === 'spotlight' ? 'block' : 'none';
+        non_spotlight_params.style.display = mode !== 'spotlight' ? 'block' : 'none';
+        this.updateMissionTime();
+        this.updateSummary();
+        this.updateTargetDebounced();
+      });
+      mode_selector.appendChild(btn);
+      mode_buttons.push(btn);
+    });
+    sar_section.appendChild(mode_selector);
+
+    // Spotlight 전용 파라미터
+    const spotlight_params = document.createElement('div');
+    spotlight_params.style.display = this.current_sar_mode === 'spotlight' ? 'block' : 'none';
+    this.createInputField(spotlight_params, 'Max Squint Angle (deg):', 'prototypeTargetSquintAngle', '20', '1', '60', '0.5');
+    sar_section.appendChild(spotlight_params);
+
+    // Sliding Spotlight / Stripmap 공통 파라미터
+    const non_spotlight_params = document.createElement('div');
+    non_spotlight_params.style.display = this.current_sar_mode !== 'spotlight' ? 'block' : 'none';
+    this.createInputField(non_spotlight_params, 'Along Track Length (km):', 'prototypeTargetAlongTrackLength', '20', '0.1', '10000', '0.1');
+    sar_section.appendChild(non_spotlight_params);
+
+    // 미션 시간 (읽기 전용, text 타입으로 '—' 표시 가능)
+    this.createReadonlyField(sar_section, 'Mission Time (s):', 'prototypeTargetMissionTime', '—', 'text');
 
     this.createInputField(sar_section, 'Range Count:', 'prototypeTargetRangeCount', '8', '1', '10000', '1');
     this.createReadonlyField(sar_section, 'Range Spacing (km):', 'prototypeTargetRangeSpacing', `${(SWATH_KM / 7).toFixed(4)}`);
@@ -193,11 +259,23 @@ export class TargetSettings {
       }
     });
 
+    // 모드별 파라미터 입력 변경 시 미션시간 갱신
+    const mission_input_ids = ['prototypeTargetSquintAngle', 'prototypeTargetAlongTrackLength'];
+    mission_input_ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', () => this.updateMissionTime());
+        el.addEventListener('change', () => this.updateMissionTime());
+      }
+    });
+
     // 입력 변경 시 요약 갱신 + Cesium 디바운스 (readonly 필드 제외)
     const input_ids = [
       'prototypeTargetRangeCount',
       'prototypeTargetAzimuthCount',
       'prototypeTargetPointSize',
+      'prototypeTargetSquintAngle',
+      'prototypeTargetAlongTrackLength',
     ];
     input_ids.forEach((id) => {
       const el = document.getElementById(id);
@@ -248,14 +326,15 @@ export class TargetSettings {
     parent: HTMLElement,
     label_text: string,
     input_id: string,
-    initial_value: string
+    initial_value: string,
+    input_type: 'number' | 'text' = 'number'
   ): HTMLElement {
     const label = document.createElement('label');
     label.style.marginTop = '10px';
     label.style.display = 'block';
     label.textContent = label_text;
     const input = document.createElement('input');
-    input.type = 'number';
+    input.type = input_type;
     input.id = input_id;
     input.value = initial_value;
     input.readOnly = true;
@@ -268,6 +347,48 @@ export class TargetSettings {
     label.appendChild(input);
     parent.appendChild(label);
     return label;
+  }
+
+  /**
+   * 위성 고도로부터 지상 궤도 속도 계산 (원궤도 근사)
+   */
+  private getSatelliteGroundSpeedKmS(): number | null {
+    const pos = this.bus_payload_manager?.getPositionForSwath?.();
+    if (!pos) return null;
+    const alt_km = pos.altitude / 1000;
+    return Math.sqrt(GM_EARTH_KM3_S2 / (R_EARTH_KM + alt_km));
+  }
+
+  /**
+   * 현재 모드와 파라미터를 기반으로 미션시간 계산 후 읽기전용 필드에 반영
+   */
+  private updateMissionTime(): void {
+    const mission_time_el = document.getElementById('prototypeTargetMissionTime') as HTMLInputElement | null;
+    if (!mission_time_el) return;
+
+    const v = this.getSatelliteGroundSpeedKmS();
+
+    if (this.current_sar_mode === 'spotlight') {
+      if (!v || !this.bus_payload_manager) {
+        mission_time_el.value = '—';
+        return;
+      }
+      const pos = this.bus_payload_manager.getPositionForSwath?.();
+      const alt_km = pos ? pos.altitude / 1000 : 500;
+      const squint_el = document.getElementById('prototypeTargetSquintAngle') as HTMLInputElement | null;
+      const squint_deg = parseFloat(squint_el?.value || '20');
+      const t = (2 * alt_km * Math.tan((squint_deg * Math.PI) / 180)) / v;
+      mission_time_el.value = t.toFixed(1);
+    } else {
+      if (!v) {
+        mission_time_el.value = '—';
+        return;
+      }
+      const along_el = document.getElementById('prototypeTargetAlongTrackLength') as HTMLInputElement | null;
+      const along_km = parseFloat(along_el?.value || '20');
+      const t = along_km / v;
+      mission_time_el.value = t.toFixed(1);
+    }
   }
 
   /**
@@ -354,6 +475,7 @@ export class TargetSettings {
 
     if (changed) {
       this.updateSpacings(); // spacing/offset 표시 갱신 + summary + debounced draw
+      this.updateMissionTime();
     }
   }
 
@@ -371,7 +493,15 @@ export class TargetSettings {
       offset_km: parseFloat((document.getElementById('prototypeTargetAzimuthOffset') as HTMLInputElement)?.value || '0'),
     };
     const summary = computeSarSummary(range_params, azimuth_params);
+    const mode_label: Record<SarMode, string> = {
+      spotlight: 'Spotlight',
+      sliding_spotlight: 'Sliding Spotlight',
+      stripmap: 'Stripmap',
+    };
+    const mission_time_val = (document.getElementById('prototypeTargetMissionTime') as HTMLInputElement | null)?.value ?? '—';
     summary_el.textContent =
+      `Mode: ${mode_label[this.current_sar_mode]}\n` +
+      `Mission Time: ${mission_time_val} s\n` +
       `Range Coverage: ${summary.range_coverage_km.toFixed(2)} km\n` +
       `Azimuth Coverage: ${summary.azimuth_coverage_km.toFixed(2)} km\n` +
       `Total Area: ${summary.total_area_km2.toFixed(2)} km²\n` +
@@ -452,6 +582,9 @@ export class TargetSettings {
       });
       this.grid_point_entities.push(entity);
     }
+
+    // Sliding Spotlight / Stripmap 모드에서 Along Track 미션 영역 표시
+    this.drawAlongTrackEntity();
   }
 
   private clearTargetEntities(): void {
@@ -460,6 +593,62 @@ export class TargetSettings {
         this.viewer.entities.remove(entity);
       }
       this.grid_point_entities.length = 0;
+    }
+    this.clearAlongTrackEntity();
+  }
+
+  /**
+   * Sliding Spotlight / Stripmap 모드에서 Along Track 미션 영역을 Cesium 폴리곤으로 표시
+   */
+  private drawAlongTrackEntity(): void {
+    this.clearAlongTrackEntity();
+    if (this.current_sar_mode === 'spotlight') return;
+    if (!this.viewer || !this.bus_payload_manager) return;
+
+    const ground_point = this.bus_payload_manager.getYAxisGroundPoint?.();
+    const pos = this.bus_payload_manager.getPositionForSwath?.();
+    if (!ground_point || !pos) return;
+
+    const along_km = parseFloat(
+      (document.getElementById('prototypeTargetAlongTrackLength') as HTMLInputElement)?.value || '20'
+    );
+
+    // swath 뒤쪽 끝선(-SWATH_KM/2)에서 시작해 진행 방향으로 along_km 뻗는 폴리곤
+    // offset = -SWATH_KM/2 + along_km/2 → az_min=-SWATH_KM/2 (swath trailing edge), az_max=-SWATH_KM/2+along_km
+    const range_params: SarRangeParams = { count: 1, spacing_km: SWATH_KM, offset_km: 0 };
+    const azimuth_params: SarAzimuthParams = { count: 1, spacing_km: along_km, offset_km: -SWATH_KM / 2 + along_km / 2 };
+
+    const corners = computeGridCornersLonLat(
+      ground_point.longitude,
+      ground_point.latitude,
+      pos.heading,
+      range_params,
+      azimuth_params
+    );
+
+    const positions = corners.map((c) =>
+      Cesium.Cartesian3.fromDegrees(c.longitude_deg, c.latitude_deg, 0)
+    );
+
+    this.along_track_entity = this.viewer.entities.add({
+      polygon: {
+        hierarchy: new Cesium.PolygonHierarchy(positions),
+        material: Cesium.Color.ORANGE.withAlpha(0.18),
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+      },
+      polyline: {
+        positions: [...positions, positions[0]],
+        width: 1.5,
+        material: Cesium.Color.ORANGE.withAlpha(0.8),
+        clampToGround: true,
+      },
+    });
+  }
+
+  private clearAlongTrackEntity(): void {
+    if (this.viewer && this.along_track_entity) {
+      this.viewer.entities.remove(this.along_track_entity);
+      this.along_track_entity = null;
     }
   }
 
@@ -715,6 +904,7 @@ export class TargetSettings {
       this.post_render_remove();
       this.post_render_remove = null;
     }
+    this.clearAlongTrackEntity();
     this.clearTargetEntities();
     this.fetch_region_info_button = null;
     this.on_region_info_fetched = null;

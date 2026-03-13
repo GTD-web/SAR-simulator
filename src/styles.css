@@ -851,6 +851,38 @@ html, body, #cesiumContainer {
   background: #B03FD4;
 }
 
+/* SAR 촬영 모드 선택 버튼 그룹 */
+.sar-mode-selector {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.sar-mode-btn {
+  flex: 1;
+  margin-top: 0 !important;
+  padding: 5px 4px !important;
+  font-size: 11px !important;
+  background: #3a2a4a !important;
+  color: #aaa !important;
+  border: 1px solid #5a3a6a !important;
+  border-radius: 3px !important;
+  cursor: pointer !important;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sar-mode-btn:hover {
+  background: #5a3a7a !important;
+  color: #ddd !important;
+}
+
+.sar-mode-btn.active {
+  background: #9C27B0 !important;
+  color: white !important;
+  border-color: #B03FD4 !important;
+}
+
 .sidebar-section .info {
   font-size: 11px;
   color: #aaa;
@@ -923,9 +955,10 @@ html, body, #cesiumContainer {
   padding: 12px;
 }
 .target-form-column {
-  flex: 0 0 200px;
+  flex: 0 0 240px;
   min-width: 0;
   overflow-y: auto;
+  padding-right: 12px;
 }
 .target-region-column {
   flex: 1;
