@@ -48,6 +48,8 @@ export class SatelliteBusPayloadManager {
     initialAzimuthAngle: number;
   } | null;
   private antennaGap: number; // 버스와 안테나 사이 간격 (미터)
+  /** Spotlight squint 적용 전 busOrientation.yawAngle 원본값. null이면 squint 미적용 상태 */
+  private base_bus_yaw: number | null;
   private directionArrows: {
     positive: any;
     negative: any;
@@ -72,6 +74,7 @@ export class SatelliteBusPayloadManager {
     this.busOrientation = null;
     this.antennaParams = null;
     this.antennaGap = 0.1; // 기본값: 100mm (미터 단위)
+    this.base_bus_yaw = null;
     this.directionArrows = null;
   }
 
@@ -743,7 +746,8 @@ export class SatelliteBusPayloadManager {
   }
 
   /**
-   * BUS Y축 방향 (정규화된 ECEF 단위 벡터) 반환. 안테나 축이 BUS와 동일하므로 Y축 지표면 직선 등에 사용
+   * BUS Y축 방향 (정규화된 ECEF 단위 벡터) 반환. 안테나 축이 BUS와 동일하므로 Y축 지표면 직선 등에 사용.
+   * initialAzimuthAngle(스쿼인트)이 설정된 경우 BUS Z축(나디르) 기준으로 추가 회전을 적용한다.
    */
   getBusYAxisDirection(): any {
     if (!this.currentCartesian) return null;
@@ -751,7 +755,71 @@ export class SatelliteBusPayloadManager {
     if (!baseAxes) return null;
     const bo = this.busOrientation ?? { rollAngle: 0, pitchAngle: 0, yawAngle: 0 };
     const axes = applyBusRollPitchYawToAxes(baseAxes, bo.rollAngle, bo.pitchAngle, bo.yawAngle);
+
+    const azimuthDeg = this.antennaParams?.initialAzimuthAngle ?? 0;
+    if (azimuthDeg !== 0) {
+      const azimuthRad = Cesium.Math.toRadians(azimuthDeg);
+      const azimuthQuat = Cesium.Quaternion.fromAxisAngle(axes.zAxis, azimuthRad, new Cesium.Quaternion());
+      const azimuthMatrix = Cesium.Matrix3.fromQuaternion(azimuthQuat, new Cesium.Matrix3());
+      const rotatedY = Cesium.Matrix3.multiplyByVector(azimuthMatrix, axes.yAxis, new Cesium.Cartesian3());
+      return Cesium.Cartesian3.normalize(rotatedY, new Cesium.Cartesian3());
+    }
+
     return Cesium.Cartesian3.normalize(axes.yAxis, new Cesium.Cartesian3());
+  }
+
+  /**
+   * Spotlight 스쿼인트 각도를 적용한다.
+   * BUS 전체를 nadir 기준으로 yaw 회전해 시각적 자세 변경 + swath 방향 변경을 동시에 달성.
+   * - 양의 squintDeg = 전방 스쿼인트 (비행 방향 ahead를 바라봄)
+   * - 내부적으로 yawAngle에서 squintDeg를 빼서 전방 회전 (nadir 기준 음의 yaw = 전방)
+   * - squintDeg = 0이면 원래 yawAngle로 복원
+   * @param squintDeg 스쿼인트 각도 (도, 양수). 0이면 리셋.
+   */
+  setAntennaSquintAngle(squintDeg: number): void {
+    if (!this.busOrientation || !this.currentCartesian || !this.busDimensions || !this.antennaParams) return;
+    try {
+      if (squintDeg === 0) {
+        // 리셋: 저장해 둔 원본 yaw 복원
+        if (this.base_bus_yaw !== null) {
+          this.busOrientation.yawAngle = this.base_bus_yaw;
+          this.base_bus_yaw = null;
+        }
+      } else {
+        // 최초 호출 시 원본 yaw 저장
+        if (this.base_bus_yaw === null) {
+          this.base_bus_yaw = this.busOrientation.yawAngle;
+        }
+        // nadir 기준 음의 yaw = 전방 스쿼인트 (ascending/descending 모두 동일 부호)
+        this.busOrientation.yawAngle = this.base_bus_yaw - squintDeg;
+      }
+
+      const baseAxes = calculateBaseAxes(this.currentCartesian, this.getVelocityOptions());
+      if (!baseAxes) return;
+      const bo = this.busOrientation;
+      const busAxes = applyBusRollPitchYawToAxes(baseAxes, bo.rollAngle, bo.pitchAngle, bo.yawAngle);
+
+      // BUS 엔티티 방향 갱신 (축 재생성 없이 quaternion만 교체)
+      const busOrientationQuat = calculateBusOrientation(this.currentCartesian, this.getVelocityOptions(), bo);
+      if (this.busEntity) {
+        this.busEntity.orientation = new Cesium.ConstantProperty(busOrientationQuat);
+      }
+
+      // 안테나 방향 갱신 (initialAzimuthAngle은 기존 사용자 설정값 유지)
+      if (this.antennaEntity) {
+        const antennaOrientation = calculateAntennaOrientation(
+          busAxes,
+          this.antennaParams.rollAngle,
+          this.antennaParams.pitchAngle,
+          this.antennaParams.yawAngle,
+          this.antennaParams.initialElevationAngle,
+          this.antennaParams.initialAzimuthAngle
+        );
+        this.antennaEntity.orientation = new Cesium.ConstantProperty(antennaOrientation);
+      }
+    } catch (error) {
+      console.error('[SatelliteBusPayloadManager] setAntennaSquintAngle 오류:', error);
+    }
   }
 
   /**

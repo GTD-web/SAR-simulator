@@ -84,6 +84,8 @@ export class TargetSettings {
   private mission_orbit_entity: any | null;
   private current_sar_mode: SarMode;
   private get_cached_satrec: (() => Satrec | null) | null;
+  /** Spotlight 모드 진입 시 저장해 두는 원본 시각 (리셋용) */
+  private spotlight_base_time: any | null;
 
   constructor() {
     this.container = null;
@@ -99,6 +101,7 @@ export class TargetSettings {
     this.mission_orbit_entity = null;
     this.current_sar_mode = 'spotlight';
     this.get_cached_satrec = null;
+    this.spotlight_base_time = null;
   }
 
   /**
@@ -174,6 +177,7 @@ export class TargetSettings {
       btn.textContent = label;
       btn.className = 'sar-mode-btn' + (this.current_sar_mode === mode ? ' active' : '');
       btn.addEventListener('click', () => {
+        const prev_mode = this.current_sar_mode;
         this.current_sar_mode = mode;
         localStorage.setItem('prototype_sar_mode', mode);
         mode_buttons.forEach((b, i) => {
@@ -181,6 +185,14 @@ export class TargetSettings {
         });
         spotlight_params.style.display = mode === 'spotlight' ? 'block' : 'none';
         non_spotlight_params.style.display = mode !== 'spotlight' ? 'block' : 'none';
+        // Spotlight 이탈 시 위성 상태 복원
+        if (prev_mode === 'spotlight' && mode !== 'spotlight') {
+          this.resetSpotlight();
+        }
+        // Spotlight 진입 시 squint 즉시 적용
+        if (mode === 'spotlight') {
+          this.applySpotlightSquint();
+        }
         this.updateMissionTime();
         this.updateSummary();
         this.updateTargetDebounced();
@@ -268,14 +280,22 @@ export class TargetSettings {
     });
 
     // 모드별 파라미터 입력 변경 시 미션시간 갱신
-    const mission_input_ids = ['prototypeTargetSquintAngle', 'prototypeTargetAlongTrackLength'];
-    mission_input_ids.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.addEventListener('input', () => this.updateMissionTime());
-        el.addEventListener('change', () => this.updateMissionTime());
-      }
-    });
+    const squint_el = document.getElementById('prototypeTargetSquintAngle');
+    if (squint_el) {
+      squint_el.addEventListener('input', () => {
+        this.updateMissionTime();
+        if (this.current_sar_mode === 'spotlight') this.applySpotlightSquint();
+      });
+      squint_el.addEventListener('change', () => {
+        this.updateMissionTime();
+        if (this.current_sar_mode === 'spotlight') this.applySpotlightSquint();
+      });
+    }
+    const along_el = document.getElementById('prototypeTargetAlongTrackLength');
+    if (along_el) {
+      along_el.addEventListener('input', () => this.updateMissionTime());
+      along_el.addEventListener('change', () => this.updateMissionTime());
+    }
 
     // 입력 변경 시 요약 갱신 + Cesium 디바운스 (readonly 필드 제외)
     const input_ids = [
@@ -687,8 +707,9 @@ export class TargetSettings {
       const squint_el = document.getElementById('prototypeTargetSquintAngle') as HTMLInputElement | null;
       const squint_deg = parseFloat(squint_el?.value || '20');
       const T = (2 * alt_km * Math.tan((squint_deg * Math.PI) / 180)) / v;
-      t_start_sec = -T / 2;
-      t_end_sec = T / 2;
+      // 위성은 이미 시작점(squint 최대 전방)으로 이동했으므로 0 → T 구간
+      t_start_sec = 0;
+      t_end_sec = T;
     } else {
       const along_el = document.getElementById('prototypeTargetAlongTrackLength') as HTMLInputElement | null;
       const along_km = parseFloat(along_el?.value || '20');
@@ -731,6 +752,61 @@ export class TargetSettings {
       this.viewer.entities.remove(this.mission_orbit_entity);
       this.mission_orbit_entity = null;
     }
+  }
+
+  /**
+   * Spotlight 모드에서 Max Squint Angle을 적용한다.
+   * - 현재 시각을 spotlight_base_time에 저장(최초 1회)
+   * - 위성을 squint 각도를 처음 맞추는 시작점(squint가 최대인 시각)으로 이동:
+   *   delta_t = -(alt_km * tan(squint_deg)) / V_ground  (squint_deg=0이면 0)
+   * - bus_payload_manager.setAntennaSquintAngle(squintDeg)로 안테나 자세 변경
+   */
+  private applySpotlightSquint(): void {
+    if (!this.viewer?.clock || !this.bus_payload_manager) return;
+
+    const squint_el = document.getElementById('prototypeTargetSquintAngle') as HTMLInputElement | null;
+    const squint_deg = parseFloat(squint_el?.value || '0');
+
+    const pos = this.bus_payload_manager.getPositionForSwath?.();
+    if (!pos) return;
+    const alt_km = pos.altitude / 1000;
+    const v = Math.sqrt(GM_EARTH_KM3_S2 / (R_EARTH_KM + alt_km));
+
+    // 현재 시각을 기준 시각으로 저장 (최초 1회, 또는 base_time이 없을 때만)
+    if (!this.spotlight_base_time) {
+      this.spotlight_base_time = Cesium.JulianDate.addSeconds(
+        this.viewer.clock.currentTime, 0, new Cesium.JulianDate()
+      );
+    }
+
+    // 시작점: 현재 위치에서 squint 각도만큼 전방 시선이 닿는 위치에 위성이 있으려면
+    // delta_t = -(alt_km * tan(squint_deg)) / V_ground 만큼 과거로 이동
+    const delta_t = squint_deg !== 0
+      ? -(alt_km * Math.tan((squint_deg * Math.PI) / 180)) / v
+      : 0;
+
+    const new_time = Cesium.JulianDate.addSeconds(
+      this.spotlight_base_time,
+      delta_t,
+      new Cesium.JulianDate()
+    );
+    this.viewer.clock.currentTime = new_time;
+
+    // 안테나 스쿼인트 방향 적용 (양수 squint = 진행 방향 전방 squint)
+    this.bus_payload_manager.setAntennaSquintAngle(squint_deg);
+  }
+
+  /**
+   * Spotlight 모드 해제 시 위성 시각과 안테나 자세를 복원한다.
+   */
+  private resetSpotlight(): void {
+    if (this.spotlight_base_time && this.viewer?.clock) {
+      this.viewer.clock.currentTime = Cesium.JulianDate.addSeconds(
+        this.spotlight_base_time, 0, new Cesium.JulianDate()
+      );
+      this.spotlight_base_time = null;
+    }
+    this.bus_payload_manager?.setAntennaSquintAngle(0);
   }
 
   /**
@@ -985,6 +1061,7 @@ export class TargetSettings {
       this.post_render_remove();
       this.post_render_remove = null;
     }
+    this.resetSpotlight();
     this.clearMissionOrbitEntity();
     this.clearAlongTrackEntity();
     this.clearTargetEntities();
