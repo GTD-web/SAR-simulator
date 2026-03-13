@@ -52,9 +52,15 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
 }
 
 app.whenReady().then(() => {
+  // 새로 생성되는 모든 창(메인 포함)에서 메뉴바 제거
+  app.on('browser-window-created', (_e, win) => {
+    win.removeMenu();
+  });
+
   createWindow();
 
   app.on('activate', () => {

@@ -49,8 +49,9 @@ export class PrototypePage {
       .target-geo-data-table {
         width: 100%;
         border-collapse: collapse;
-        margin-top: 8px;
+        margin: 0 0 16px 0;
       }
+      .target-geo-data-table:first-child { margin-top: 0; }
       .target-geo-data-table th,
       .target-geo-data-table td {
         text-align: left;
@@ -64,7 +65,6 @@ export class PrototypePage {
         gap: 8px;
         margin: 16px 0 8px 0;
       }
-      .target-geo-data-section-header:first-of-type { margin-top: 0; }
       .target-geo-data-grid-title,
       .target-geo-data-json-title {
         margin: 0;
@@ -77,12 +77,27 @@ export class PrototypePage {
         overflow-y: auto;
         border: 1px solid #333;
         border-radius: 4px;
+        margin-bottom: 16px;
       }
       .target-geo-data-grid-table { margin: 0; }
       .target-geo-data-grid-table thead th { position: sticky; top: 0; background: rgba(30,30,30,0.98); z-index: 1; }
-      .target-geo-data-json-title { margin: 16px 0 8px 0; font-size: 13px; color: #ccc; }
+      .target-geo-data-open-new {
+        flex-shrink: 0;
+        padding: 2px 4px;
+        font-size: 11px;
+        line-height: 1;
+        background: rgba(94, 84, 142, 0.6);
+        color: #e0b1cb;
+        border: 1px solid #5e548e;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .target-geo-data-open-new:hover {
+        background: rgba(190, 149, 196, 0.4);
+        border-color: #9f86c0;
+      }
       .target-geo-data-json-pre { max-height: 240px; overflow: auto; font-size: 11px; white-space: pre-wrap; word-break: break-all; padding: 8px; border: 1px solid #333; border-radius: 4px; margin: 0 0 8px 0; background: rgba(0,0,0,0.3); }
-      .target-geo-data-json-dl { width: 100%; padding: 8px; margin-top: 4px; cursor: pointer; }
+      .target-geo-data-json-dl { width: 100%; padding: 8px; margin-top: 8px; cursor: pointer; }
       .prototype-map-context-menu {
         position: fixed;
         z-index: 2000;
@@ -504,7 +519,10 @@ const terrain = {
         )
         .join('');
       html += `
-        <h5 class="target-geo-data-grid-title">DEM Grid (for SAR Geocoding)</h5>
+        <div class="target-geo-data-section-header">
+          <h5 class="target-geo-data-grid-title">DEM Grid (for SAR Geocoding)</h5>
+          <button type="button" class="target-geo-data-open-new" data-action="open-dem-grid" title="Open in new window" aria-label="Open in new window">↗</button>
+        </div>
         <div class="target-geo-data-grid-scroll">
           <table class="target-geo-data-table target-geo-data-grid-table">
             <thead><tr><th>No.</th><th>Lon (°)</th><th>Lat (°)</th><th>Elev (m)</th></tr></thead>
@@ -522,7 +540,10 @@ const terrain = {
       jsonStr = JSON.stringify({ error: 'JSON serialization failed' });
     }
     html += `
-      <h5 class="target-geo-data-json-title">JSON Output</h5>
+      <div class="target-geo-data-section-header">
+        <h5 class="target-geo-data-json-title">JSON Output</h5>
+        <button type="button" class="target-geo-data-open-new" data-action="open-json" title="Open in new window" aria-label="Open in new window">↗</button>
+      </div>
       <pre class="target-geo-data-json-pre" id="targetGeoDataJsonPre"></pre>
       <button type="button" class="target-geo-data-json-dl sidebar-section button" id="targetGeoDataJsonDownload">Download JSON</button>
     `;
@@ -534,6 +555,91 @@ const terrain = {
     const downloadBtn = content.querySelector('#targetGeoDataJsonDownload');
     if (downloadBtn) {
       downloadBtn.addEventListener('click', () => this.downloadRegionInfoJson());
+    }
+
+    const openNewBtns = content.querySelectorAll('.target-geo-data-open-new');
+    openNewBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const action = (btn as HTMLElement).getAttribute('data-action');
+        if (action === 'open-dem-grid' && regionInfo.elevationGrid?.length) {
+          this.openDemGridInNewWindow(regionInfo.elevationGrid);
+        } else if (action === 'open-json') {
+          this.openJsonInNewWindow(jsonStr);
+        }
+      });
+    });
+  }
+
+  /**
+   * DEM Grid 데이터를 새 창에서 표시
+   */
+  private openDemGridInNewWindow(
+    elevationGrid: { longitude_deg: number; latitude_deg: number; height_m: number }[]
+  ): void {
+    const gridRows = elevationGrid
+      .map(
+        (p, i) =>
+          `<tr><td>${i + 1}</td><td>${p.longitude_deg.toFixed(6)}</td><td>${p.latitude_deg.toFixed(6)}</td><td>${p.height_m.toFixed(1)}</td></tr>`
+      )
+      .join('');
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>DEM Grid</title>
+  <style>
+    body { font-family: sans-serif; margin: 16px; background: #231942; color: #e0b1cb; }
+    h1 { font-size: 16px; margin-bottom: 12px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #5e548e; }
+    th { background: rgba(94, 84, 142, 0.6); color: #be95c4; }
+    table { font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>DEM Grid (for SAR Geocoding)</h1>
+  <table>
+    <thead><tr><th>No.</th><th>Lon (°)</th><th>Lat (°)</th><th>Elev (m)</th></tr></thead>
+    <tbody>${gridRows}</tbody>
+  </table>
+</body>
+</html>`;
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+  }
+
+  /**
+   * JSON 출력을 새 창에서 표시
+   */
+  private openJsonInNewWindow(jsonStr: string): void {
+    const escaped = jsonStr
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>JSON Output</title>
+  <style>
+    body { font-family: monospace; margin: 16px; background: #231942; color: #e0b1cb; font-size: 12px; }
+    h1 { font-size: 16px; margin-bottom: 12px; }
+    pre { white-space: pre-wrap; word-break: break-all; padding: 12px; border: 1px solid #5e548e; border-radius: 4px; background: rgba(0,0,0,0.3); overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>JSON Output</h1>
+  <pre>${escaped}</pre>
+</body>
+</html>`;
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
     }
   }
 
